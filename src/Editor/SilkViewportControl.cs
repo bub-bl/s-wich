@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Crowbar.Engine;
+using Crowbar.Editor.Rendering;
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 using Color = Silk.NET.WebGPU.Color;
@@ -33,10 +34,14 @@ public unsafe class SilkViewportControl : NativeControlHost
     private Shader? _meshShader;
 
     private RenderPipeline* _meshPipeline;
+    private RenderPipeline* _transparentMeshPipeline;
     private RenderPipeline* _wireframePipeline;
     private RenderPipeline* _selectionDepthPipeline;
     private RenderPipeline* _outlinePipeline;
     private RenderPipeline* _gridPipeline;
+    private OpaqueMeshPass? _opaqueMeshPass;
+    private TransparentMeshPass? _transparentMeshPass;
+    private WireframeMeshPass? _wireframeMeshPass;
 
     private Buffer* _cubeVbo;
     private Buffer* _cubeEbo;
@@ -284,29 +289,12 @@ public unsafe class SilkViewportControl : NativeControlHost
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct MeshUniforms
-    {
-        public Matrix4x4 Model;
-        public Matrix4x4 View;
-        public Matrix4x4 Proj;
-        public Vector4 Color;
-        public Vector3 LightDir;
-        public uint IsSelected;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct GridUniforms
     {
         public Matrix4x4 View;
         public Matrix4x4 Proj;
         public Matrix4x4 ViewInv;
         public Matrix4x4 ProjInv;
-    }
-
-    private sealed class MeshGpuResources
-    {
-        public Buffer* UniformBuffer;
-        public BindGroup* BindGroup;
     }
 
     private void InitBuffers()
@@ -549,9 +537,29 @@ public unsafe class SilkViewportControl : NativeControlHost
             Attributes = vertexAttribs
         };
 
+        var meshBlendState = new BlendState
+        {
+            Color = new BlendComponent
+            {
+                SrcFactor = BlendFactor.SrcAlpha,
+                DstFactor = BlendFactor.OneMinusSrcAlpha,
+                Operation = BlendOperation.Add
+            },
+            Alpha = new BlendComponent
+            {
+                SrcFactor = BlendFactor.One,
+                DstFactor = BlendFactor.OneMinusSrcAlpha,
+                Operation = BlendOperation.Add
+            }
+        };
+
         var colorTarget = new ColorTargetState
         {
             Format = _swapChainFormat,
+            // Mesh materials use the alpha supplied by the inspector.  The
+            // default (opaque) value remains unchanged, while lower values
+            // blend the object with what was rendered behind it.
+            Blend = &meshBlendState,
             WriteMask = ColorWriteMask.All
         };
 
@@ -598,6 +606,15 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         _meshPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in meshPipelineDesc);
 
+        // Transparent meshes must still test against opaque geometry, but
+        // they must not write their own depth. Otherwise an object with
+        // alpha 0 would remain an invisible occluder for objects behind it.
+        var transparentDepthStencilState = depthStencilState;
+        transparentDepthStencilState.DepthWriteEnabled = false;
+        var transparentMeshPipelineDesc = meshPipelineDesc;
+        transparentMeshPipelineDesc.DepthStencil = &transparentDepthStencilState;
+        _transparentMeshPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in transparentMeshPipelineDesc);
+
         // This pass writes only the selected mesh's depth.  It is used just
         // before the outline so the expanded back-face shell is hidden inside
         // the selected object, while still being able to overlay other scene
@@ -631,6 +648,9 @@ public unsafe class SilkViewportControl : NativeControlHost
         outlineDepthStencilState.DepthCompare = CompareFunction.LessEqual;
         wireframePipelineDesc.DepthStencil = &outlineDepthStencilState;
         _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
+        _opaqueMeshPass = new OpaqueMeshPass(_meshPipeline);
+        _transparentMeshPass = new TransparentMeshPass(_transparentMeshPipeline);
+        _wireframeMeshPass = new WireframeMeshPass(_wireframePipeline);
 
         var outlineFragmentState = fragmentState;
         var outlineFsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("fs_outline").Name);
@@ -874,73 +894,57 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         // A. Draw Scene Objects
         bool wireframe = Scene?.IsWireframe == true;
-        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, wireframe ? _wireframePipeline : _meshPipeline);
 
         Vector3 lightDir = Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.7f));
-        SceneObject? outlineObject = null;
-        Matrix4x4 outlineModel = default;
-        MeshGpuResources? outlineResources = null;
+        SelectionRenderData? selection = null;
 
         if (Scene != null)
         {
             CleanupMeshResources();
 
-            foreach (var obj in Scene.Objects)
-            {
-                if (!obj.IsVisible) continue;
+            var visibleObjects = Scene.Objects
+                .Where(obj => obj.IsVisible)
+                .ToList();
 
+            foreach (var obj in visibleObjects)
+            {
                 if (!Scene.IsPaused)
                 {
                     obj.RotationY = (obj.RotationY + 45f * (float)deltaTime) % 360f;
                 }
-
-                Matrix4x4 scale = Matrix4x4.CreateScale(obj.ScaleX, obj.ScaleY, obj.ScaleZ);
-                Matrix4x4 rotX = Matrix4x4.CreateRotationX(MathF.PI / 180f * obj.RotationX);
-                Matrix4x4 rotY = Matrix4x4.CreateRotationY(MathF.PI / 180f * obj.RotationY);
-                Matrix4x4 rotZ = Matrix4x4.CreateRotationZ(MathF.PI / 180f * obj.RotationZ);
-                Matrix4x4 trans = Matrix4x4.CreateTranslation(obj.PositionX, obj.PositionY, obj.PositionZ);
-
-                Matrix4x4 model = scale * rotX * rotY * rotZ * trans;
-
-                MeshUniforms uniforms = new MeshUniforms
-                {
-                    Model = model,
-                    View = view,
-                    Proj = proj,
-                    Color = GetMaterialColor(obj),
-                    LightDir = GetMaterialLightDirection(obj, lightDir),
-                    IsSelected = wireframe && obj.IsSelected ? 1u : 0u
-                };
-
-                MeshGpuResources meshResources = GetMeshResources(obj);
-                WebGpuApi.Wgpu.QueueWriteBuffer(_queue, meshResources.UniformBuffer, 0, &uniforms, (nuint)sizeof(MeshUniforms));
-                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, meshResources.BindGroup, 0, null);
-
-                if (obj.IsSelected && !wireframe)
-                {
-                    outlineObject = obj;
-                    outlineModel = model;
-                    outlineResources = meshResources;
-                }
-
-                if (obj.MeshType == "Pyramid")
-                {
-                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-                    Buffer* indexBuffer = wireframe ? _pyramidWireframeEbo : _pyramidEbo;
-                    uint indexCount = wireframe ? 30u : 18u;
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint16, 0, (ulong)(indexCount * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
-                }
-                else
-                {
-                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-                    Buffer* indexBuffer = wireframe ? _cubeWireframeEbo : _cubeEbo;
-                    uint indexCount = wireframe ? 48u : 36u;
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint16, 0, (ulong)(indexCount * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
-                }
-
             }
+
+            var meshContext = new MeshRenderContext
+            {
+                Pass = pass,
+                Queue = _queue,
+                View = view,
+                Proj = proj,
+                LightDirection = lightDir,
+                CameraPosition = eye,
+                CubeVertexBuffer = _cubeVbo,
+                CubeIndexBuffer = _cubeEbo,
+                CubeWireframeIndexBuffer = _cubeWireframeEbo,
+                PyramidVertexBuffer = _pyramidVbo,
+                PyramidIndexBuffer = _pyramidEbo,
+                PyramidWireframeIndexBuffer = _pyramidWireframeEbo,
+                GetResources = GetMeshResources,
+                GetColor = GetMaterialColor,
+                GetLightDirection = GetMaterialLightDirection,
+                Wireframe = wireframe
+            };
+
+            if (wireframe)
+            {
+                _wireframeMeshPass!.Execute(meshContext, visibleObjects);
+            }
+            else
+            {
+                _opaqueMeshPass!.Execute(meshContext, visibleObjects);
+                _transparentMeshPass!.Execute(meshContext, visibleObjects);
+            }
+
+            selection = meshContext.Selection;
         }
 
         // B. Draw Infinite Grid. It uses depth testing without writing depth,
@@ -953,22 +957,22 @@ public unsafe class SilkViewportControl : NativeControlHost
         // C. Draw the selection overlay after the grid.  The grid therefore
         // uses the original scene depth, while the overlay can still mask
         // itself with the selected object's depth.
-        if (outlineObject != null && outlineResources != null)
+        if (selection != null)
         {
             MeshUniforms outlineUniforms = new MeshUniforms
             {
-                Model = outlineModel,
+                Model = selection.Model,
                 View = view,
                 Proj = proj,
-                Color = GetMaterialColor(outlineObject),
-                LightDir = GetMaterialLightDirection(outlineObject, lightDir),
+                Color = GetMaterialColor(selection.Object),
+                LightDir = GetMaterialLightDirection(selection.Object, lightDir),
                 IsSelected = 0u
             };
-            WebGpuApi.Wgpu.QueueWriteBuffer(_queue, outlineResources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
+            WebGpuApi.Wgpu.QueueWriteBuffer(_queue, selection.Resources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
 
             WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
-            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
-            if (outlineObject.MeshType == "Pyramid")
+            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
+            if (selection.Object.MeshType == "Pyramid")
             {
                 WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
                 WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
@@ -982,8 +986,8 @@ public unsafe class SilkViewportControl : NativeControlHost
             }
 
             WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
-            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
-            if (outlineObject.MeshType == "Pyramid")
+            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
+            if (selection.Object.MeshType == "Pyramid")
             {
                 WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
                 WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));

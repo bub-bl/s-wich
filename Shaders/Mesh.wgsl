@@ -51,7 +51,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let diff = max(dot(norm, light), 0.25);
     var base_color = u.color.rgb * diff;
     if (u.isSelected != 0u) {
-        return vec4<f32>(1.0, 0.72, 0.08, 1.0);
+        // Keep the material alpha while applying the selection highlight.
+        return vec4<f32>(1.0, 0.72, 0.08, u.color.a);
     }
     return vec4<f32>(base_color, u.color.a);
 }
