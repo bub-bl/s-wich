@@ -3,41 +3,39 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:MyApp"
+        xmlns:chrome="clr-namespace:Avalonia.Controls.Chrome;assembly=Avalonia.Controls"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="MyApp.MainWindow"
-        Title="Silk.NET Sandbox Engine Editor - Avalonia 12"
+        Title=""
         Width="1280" Height="800"
+        WindowDecorations="Full"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="32"
-        WindowDecorations="None"
+        ExtendClientAreaTitleBarHeightHint="-1"
         Background="#18181B"
         Foreground="#E4E4E7">
 
     <Window.Styles>
-        <Style Selector="Button.titlebar-button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="#D4D4D8"/>
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style Selector="MenuItem">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="9,4"/>
         </Style>
-        <Style Selector="Button.titlebar-button:pointerover">
+        <Style Selector="MenuItem.title-menu-item">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="BackgroundSizing" Value="InnerBorderEdge"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="0,3"/>
+        </Style>
+        <Style Selector="MenuItem.title-menu-item:pointerover">
             <Setter Property="Background" Value="#3F3F46"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
         </Style>
-        <Style Selector="Button.titlebar-button:pressed">
-            <Setter Property="Background" Value="#52525B"/>
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="BackgroundSizing" Value="InnerBorderEdge"/>
         </Style>
-        <Style Selector="Button.titlebar-close:pointerover">
-            <Setter Property="Background" Value="#C42B1C"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-        </Style>
-        <Style Selector="Button.titlebar-close:pressed">
-            <Setter Property="Background" Value="#A52619"/>
+        <Style Selector="ToggleButton">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="BackgroundSizing" Value="InnerBorderEdge"/>
         </Style>
     </Window.Styles>
 
@@ -45,42 +43,39 @@
 
         <!-- 1. Custom titlebar: menus share the same row as the window controls. -->
         <Border Grid.Row="0" Background="#1F1F1F" BorderBrush="#3F3F46" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto, *, Auto" Height="32">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <Border Width="32" Height="32" Padding="11,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="◆" Foreground="#60A5FA" FontSize="10" VerticalAlignment="Center"/>
-            </Border>
-            <Menu Background="Transparent" Height="32" VerticalAlignment="Center">
-            <MenuItem Header="_File">
-                <MenuItem Header="_New Scene" Click="OnNewSceneClick"/>
-                <Separator/>
-                <MenuItem Header="_Exit" Click="OnExitClick"/>
-            </MenuItem>
-            <MenuItem Header="_Edit">
-                <MenuItem Header="_Duplicate"/>
-                <MenuItem Header="_Delete" Click="OnDeleteObjectClick"/>
-            </MenuItem>
-            <MenuItem Header="_GameObject">
-                <MenuItem Header="3D Object > Cube" Click="OnAddCubeClick"/>
-                <MenuItem Header="3D Object > Pyramid" Click="OnAddPyramidClick"/>
-            </MenuItem>
-            <MenuItem Header="_Window">
-                <MenuItem Header="Reset Viewport Camera" Click="OnResetCameraClick"/>
-            </MenuItem>
-            <MenuItem Header="_Help">
-                <MenuItem Header="About Engine"/>
-            </MenuItem>
-            </Menu>
-        </StackPanel>
-                <Grid x:Name="TitleBarDragArea" Grid.Column="1" PointerPressed="OnTitleBarPointerPressed">
+            <Grid ColumnDefinitions="Auto, *" Height="32" Margin="0,0,138,0">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="32" Height="32" Padding="11,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="◆" Foreground="#60A5FA" FontSize="10" VerticalAlignment="Center"/>
+                    </Border>
+                    <Menu Background="Transparent" Height="32" VerticalAlignment="Center">
+                        <MenuItem Classes="title-menu-item" Header="_File">
+                            <MenuItem Header="_New Scene" Click="OnNewSceneClick"/>
+                            <Separator/>
+                            <MenuItem Header="_Exit" Click="OnExitClick"/>
+                        </MenuItem>
+                        <MenuItem Classes="title-menu-item" Header="_Edit">
+                            <MenuItem Header="_Duplicate"/>
+                            <MenuItem Header="_Delete" Click="OnDeleteObjectClick"/>
+                        </MenuItem>
+                        <MenuItem Classes="title-menu-item" Header="_GameObject">
+                            <MenuItem Header="3D Object > Cube" Click="OnAddCubeClick"/>
+                            <MenuItem Header="3D Object > Pyramid" Click="OnAddPyramidClick"/>
+                        </MenuItem>
+                        <MenuItem Classes="title-menu-item" Header="_Window">
+                            <MenuItem Header="Reset Viewport Camera" Click="OnResetCameraClick"/>
+                        </MenuItem>
+                        <MenuItem Classes="title-menu-item" Header="_Help">
+                            <MenuItem Header="About Engine"/>
+                        </MenuItem>
+                    </Menu>
+                </StackPanel>
+                <Grid x:Name="TitleBarDragArea" Grid.Column="1" Background="Transparent"
+                      chrome:WindowDecorationProperties.ElementRole="TitleBar"
+                      PointerPressed="OnTitleBarPointerPressed">
                     <TextBlock Text="Silk.NET Sandbox Engine Editor" HorizontalAlignment="Center" VerticalAlignment="Center"
                                FontSize="12" Foreground="#D4D4D8" IsHitTestVisible="False"/>
                 </Grid>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Height="32">
-                    <Button Classes="titlebar-button" Content="&#xE921;" Click="OnMinimizeClick" Width="46" Height="32"/>
-                    <Button Classes="titlebar-button" Content="&#xE922;" x:Name="BtnMaximize" Click="OnMaximizeClick" Width="46" Height="32"/>
-                    <Button Classes="titlebar-button titlebar-close" Content="&#xE8BB;" Click="OnCloseClick" Width="46" Height="32"/>
-                </StackPanel>
             </Grid>
         </Border>
 
@@ -88,13 +83,25 @@
         <Border Grid.Row="1" Background="#202023" BorderBrush="#3F3F46" BorderThickness="0,1,0,1" Padding="8,4">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
-                    <Button Content="▶ Play" x:Name="BtnPlay" Click="OnTogglePlayClick" Background="#2563EB" Foreground="White" Padding="12,4" FontWeight="SemiBold"/>
-                    <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Padding="8,4"/>
-                    <Button Content="🎥 Reset Camera" Click="OnResetCameraClick" Padding="8,4"/>
+                    <Border CornerRadius="6" ClipToBounds="True">
+                        <Button Content="▶ Play" x:Name="BtnPlay" Click="OnTogglePlayClick" Background="#2563EB" Foreground="White" Padding="12,4" FontWeight="SemiBold"/>
+                    </Border>
+                    <Border CornerRadius="6" ClipToBounds="True">
+                        <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Padding="8,4"/>
+                    </Border>
+                    <Border CornerRadius="6" ClipToBounds="True">
+                        <Button Content="🎥 Reset Camera" Click="OnResetCameraClick" Padding="8,4"/>
+                    </Border>
                     <Separator Width="1" Height="20" Background="#3F3F46" Margin="4,0"/>
-                    <Button Content="+ Add Cube" Click="OnAddCubeClick" Padding="8,4"/>
-                    <Button Content="+ Add Pyramid" Click="OnAddPyramidClick" Padding="8,4"/>
-                    <Button Content="🗑 Remove" Click="OnDeleteObjectClick" Padding="8,4"/>
+                    <Border CornerRadius="6" ClipToBounds="True">
+                        <Button Content="+ Add Cube" Click="OnAddCubeClick" Padding="8,4"/>
+                    </Border>
+                    <Border CornerRadius="6" ClipToBounds="True">
+                        <Button Content="+ Add Pyramid" Click="OnAddPyramidClick" Padding="8,4"/>
+                    </Border>
+                    <Border CornerRadius="6" ClipToBounds="True">
+                        <Button Content="🗑 Remove" Click="OnDeleteObjectClick" Padding="8,4"/>
+                    </Border>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="0,0,8,0">
                     <TextBlock Text="{Binding #Viewport.Fps, StringFormat='FPS: {0}'}" FontSize="11" Foreground="#4ADE80" FontWeight="Bold"/>
