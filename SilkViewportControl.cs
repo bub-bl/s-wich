@@ -628,26 +628,36 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let fragPos3D = in.near_point + t * (in.far_point - in.near_point);
     let clipSpacePos = gu.proj * gu.view * vec4<f32>(fragPos3D, 1.0);
     let realDepth = clipSpacePos.z / clipSpacePos.w;
+    // The grid lies exactly on the ground plane, so its depth can match an
+    // object's depth at the contact edge.  Nudge it forward by a fraction of
+    // a pixel to make the depth comparison deterministic and avoid z-fighting
+    // without making the grid ignore objects that are actually in front of it.
+    let depthBias = max(fwidth(realDepth) * 0.5, 0.000001);
 
     let coord = fragPos3D.xz;
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let line = min(grid.x, grid.y);
+    // Keep the main axes visible as continuous one-pixel lines.  Using a
+    // tiny fraction of the pixel footprint here makes the axes hit only
+    // occasional fragments, which shows up as red/blue dots along the grid.
+    let minimumz = min(derivative.y, 1.0);
+    let minimumx = min(derivative.x, 1.0);
+    let onXAxis = abs(fragPos3D.x) <= minimumx;
+    let onZAxis = abs(fragPos3D.z) <= minimumz;
     // The grid is transparent between its lines.  Discarding those pixels is
     // important because the grid is rendered after the meshes and must not
     // cover objects through an otherwise invisible fragment.
-    if (line > 1.0) {
+    if (line > 1.0 && !onXAxis && !onZAxis) {
         discard;
     }
-    let minimumz = min(derivative.y, 1.0);
-    let minimumx = min(derivative.x, 1.0);
 
     var gridColor = vec4<f32>(0.35, 0.35, 0.38, 1.0 - min(line, 1.0));
 
-    if (fragPos3D.x > -0.02 * minimumx && fragPos3D.x < 0.02 * minimumx) {
+    if (onXAxis) {
         gridColor = vec4<f32>(0.2, 0.4, 0.9, 1.0);
     }
-    if (fragPos3D.z > -0.02 * minimumz && fragPos3D.z < 0.02 * minimumz) {
+    if (onZAxis) {
         gridColor = vec4<f32>(0.9, 0.2, 0.2, 1.0);
     }
 
@@ -655,7 +665,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     var out: FragmentOutput;
     out.color = gridColor * fading;
-    out.depth = realDepth;
+    out.depth = max(realDepth - depthBias, 0.0);
     return out;
 }
 ";
