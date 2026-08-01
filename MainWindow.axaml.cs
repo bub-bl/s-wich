@@ -1,17 +1,26 @@
 using System;
+using System.Diagnostics;
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace Crowbar;
 
 public partial class MainWindow : Window
 {
+    private const double AssetsDrawerOuterMargin = 16;
     private Point _lastMousePos;
     private bool _isOrbiting;
     private bool _isPanning;
+    private bool _isAssetsDrawerOpen;
+    private DispatcherTimer? _assetsDrawerAnimationTimer;
+    private Stopwatch? _assetsDrawerAnimationClock;
+    private double _assetsDrawerAnimationStart;
+    private double _assetsDrawerAnimationTarget;
 
     public Scene Scene { get; } = new();
 
@@ -19,6 +28,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        AssetsDrawerPopup.PlacementTarget = AssetsDrawerAnchor;
+        UpdateAssetsDrawerWidth();
+        AssetsDrawer.RenderTransform = new TranslateTransform(0, 360);
+        AssetsDrawer.IsHitTestVisible = false;
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+        SizeChanged += OnMainWindowSizeChanged;
 
         InitDefaultScene();
         Log("Engine initialized with Avalonia 12 and Silk.NET WebGPU (WGPU).");
@@ -155,6 +170,74 @@ public partial class MainWindow : Window
     private void OnExitClick(object? sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None)
+        {
+            ToggleAssetsDrawer();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && _isAssetsDrawerOpen)
+        {
+            SetAssetsDrawerOpen(false);
+            e.Handled = true;
+        }
+    }
+
+    private void OnCloseAssetsDrawerClick(object? sender, RoutedEventArgs e)
+    {
+        SetAssetsDrawerOpen(false);
+    }
+
+    private void ToggleAssetsDrawer()
+    {
+        SetAssetsDrawerOpen(!_isAssetsDrawerOpen);
+    }
+
+    private void SetAssetsDrawerOpen(bool isOpen)
+    {
+        _isAssetsDrawerOpen = isOpen;
+        AssetsDrawer.IsHitTestVisible = isOpen;
+        AnimateAssetsDrawer(isOpen ? 0 : AssetsDrawer.Height);
+    }
+
+    private void OnMainWindowSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        UpdateAssetsDrawerWidth();
+    }
+
+    private void UpdateAssetsDrawerWidth()
+    {
+        AssetsDrawer.Width = Math.Max(0, Bounds.Width - AssetsDrawerOuterMargin);
+    }
+
+    private void AnimateAssetsDrawer(double target)
+    {
+        _assetsDrawerAnimationTimer?.Stop();
+        _assetsDrawerAnimationStart = (AssetsDrawer.RenderTransform as TranslateTransform)?.Y ?? AssetsDrawer.Height;
+        _assetsDrawerAnimationTarget = target;
+        _assetsDrawerAnimationClock = Stopwatch.StartNew();
+        _assetsDrawerAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _assetsDrawerAnimationTimer.Tick += OnAssetsDrawerAnimationTick;
+        _assetsDrawerAnimationTimer.Start();
+    }
+
+    private void OnAssetsDrawerAnimationTick(object? sender, EventArgs e)
+    {
+        const double durationMs = 220;
+        double progress = Math.Clamp((_assetsDrawerAnimationClock?.Elapsed.TotalMilliseconds ?? durationMs) / durationMs, 0, 1);
+        double easedProgress = 1 - Math.Pow(1 - progress, 3);
+        double y = _assetsDrawerAnimationStart + (_assetsDrawerAnimationTarget - _assetsDrawerAnimationStart) * easedProgress;
+        AssetsDrawer.RenderTransform = new TranslateTransform(0, y);
+
+        if (progress >= 1)
+        {
+            _assetsDrawerAnimationTimer?.Stop();
+            _assetsDrawerAnimationTimer = null;
+            _assetsDrawerAnimationClock = null;
+        }
     }
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
