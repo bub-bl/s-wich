@@ -11,7 +11,7 @@
                 <TextBlock Text="INSPECTOR" FontWeight="Bold" FontSize="11" Foreground="#A1A1AA" LetterSpacing="1"/>
             </Border>
             <ScrollViewer Grid.Row="1" Padding="12">
-                <StackPanel Spacing="12" DataContext="{Binding Scene.SelectedObject, RelativeSource={RelativeSource AncestorType=local:InspectorPanel}}">
+                <StackPanel Spacing="12" DataContext="{Binding SelectedObject, RelativeSource={RelativeSource AncestorType=local:InspectorPanel}}">
                     <StackPanel.Styles>
                         <Style Selector="TextBlock.Header">
                             <Setter Property="FontWeight" Value="SemiBold"/>

@@ -15,8 +15,10 @@
             </Border>
 
             <TreeView Grid.Row="1"
+                      x:Name="HierarchyTree"
                       ItemsSource="{Binding TreeRoots, RelativeSource={RelativeSource AncestorType=local:HierarchyPanel}}"
                       SelectedItem="{Binding SelectedNode, RelativeSource={RelativeSource AncestorType=local:HierarchyPanel}, Mode=TwoWay}"
+                      SelectionChanged="OnTreeSelectionChanged"
                       Background="Transparent"
                       BorderThickness="0"
                       Margin="4,6,4,4">

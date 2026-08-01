@@ -63,6 +63,18 @@ public partial class HierarchyPanel : UserControl
 
     private void OnObjectsChanged(object? sender, NotifyCollectionChangedEventArgs e) => RebuildTree();
 
+    private void OnTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        foreach (var item in e.AddedItems)
+        {
+            if (item is HierarchyNode { SceneObject: not null } node && Scene != null)
+            {
+                Scene.SelectedObject = node.SceneObject;
+                break;
+            }
+        }
+    }
+
     private void OnScenePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(Scene.SelectedObject))
