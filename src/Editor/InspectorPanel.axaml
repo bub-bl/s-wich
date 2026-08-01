@@ -3,15 +3,16 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:local="clr-namespace:Crowbar"
+             xmlns:editor="clr-namespace:Crowbar.Editor"
              mc:Ignorable="d"
-             x:Class="Crowbar.InspectorPanel">
+             x:Class="Crowbar.Editor.InspectorPanel">
     <Border Background="#1F1F23" BorderBrush="#27272A" BorderThickness="1,0,0,0">
         <Grid RowDefinitions="Auto, *">
             <Border Grid.Row="0" Background="#27272A" Padding="10,6">
                 <TextBlock Text="INSPECTOR" FontWeight="Bold" FontSize="11" Foreground="#A1A1AA" LetterSpacing="1"/>
             </Border>
             <ScrollViewer Grid.Row="1" Padding="12">
-                <StackPanel Spacing="12" DataContext="{Binding SelectedObject, RelativeSource={RelativeSource AncestorType=local:InspectorPanel}}">
+                <StackPanel Spacing="12" DataContext="{Binding SelectedObject, RelativeSource={RelativeSource AncestorType=editor:InspectorPanel}}">
                     <StackPanel.Styles>
                         <Style Selector="TextBlock.Header">
                             <Setter Property="FontWeight" Value="SemiBold"/>

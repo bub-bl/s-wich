@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Editor/Editor.csproj" />
+  <Project Path="src/Engine/Engine.csproj" />
+</Solution>

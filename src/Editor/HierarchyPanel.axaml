@@ -3,8 +3,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:local="clr-namespace:Crowbar"
+             xmlns:editor="clr-namespace:Crowbar.Editor"
              mc:Ignorable="d"
-             x:Class="Crowbar.HierarchyPanel">
+             x:Class="Crowbar.Editor.HierarchyPanel">
     <Border Background="#1F1F23" BorderBrush="#27272A" BorderThickness="0,0,1,0">
         <Grid RowDefinitions="Auto, *">
             <Border Grid.Row="0" Background="#27272A" Padding="10,6">
@@ -16,8 +17,8 @@
 
             <TreeView Grid.Row="1"
                       x:Name="HierarchyTree"
-                      ItemsSource="{Binding TreeRoots, RelativeSource={RelativeSource AncestorType=local:HierarchyPanel}}"
-                      SelectedItem="{Binding SelectedNode, RelativeSource={RelativeSource AncestorType=local:HierarchyPanel}, Mode=TwoWay}"
+                      ItemsSource="{Binding TreeRoots, RelativeSource={RelativeSource AncestorType=editor:HierarchyPanel}}"
+                      SelectedItem="{Binding SelectedNode, RelativeSource={RelativeSource AncestorType=editor:HierarchyPanel}, Mode=TwoWay}"
                       SelectionChanged="OnTreeSelectionChanged"
                       Background="Transparent"
                       BorderThickness="0"
@@ -34,7 +35,7 @@
                     </Style>
                 </TreeView.Styles>
                 <TreeView.ItemTemplate>
-                    <TreeDataTemplate DataType="local:HierarchyNode" ItemsSource="{Binding Children}">
+                    <TreeDataTemplate DataType="editor:HierarchyNode" ItemsSource="{Binding Children}">
                         <Border Padding="5,4" CornerRadius="3">
                             <Grid ColumnDefinitions="20,*,Auto" MinWidth="210">
                                 <TextBlock Text="{Binding Icon}" FontSize="13" Foreground="#F5B94C" HorizontalAlignment="Center" VerticalAlignment="Center"/>

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -7,14 +5,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Crowbar.Engine;
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 using Color = Silk.NET.WebGPU.Color;
 
-namespace Crowbar;
+namespace Crowbar.Editor;
 
 public unsafe class SilkViewportControl : NativeControlHost
 {

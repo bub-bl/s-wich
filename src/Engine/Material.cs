@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Crowbar;
+namespace Crowbar.Engine;
 
 public enum ShaderParameterType
 {
@@ -23,7 +23,11 @@ public sealed class Material
 {
     private readonly Dictionary<string, object> _values = new(StringComparer.Ordinal);
 
-    public Material(string name, Shader shader)
+    public string Name { get; }
+    public Shader Shader { get; }
+    public IReadOnlyDictionary<string, object> Values => _values;
+    
+    private Material(string name, Shader shader)
     {
         Name = string.IsNullOrWhiteSpace(name)
             ? throw new ArgumentException("A material needs a name.", nameof(name))
@@ -31,15 +35,12 @@ public sealed class Material
         Shader = shader ?? throw new ArgumentNullException(nameof(shader));
     }
 
-    public string Name { get; }
-    public Shader Shader { get; }
-    public IReadOnlyDictionary<string, object> Values => _values;
-
     public static Material FromShader(string shaderName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(shaderName);
 
-        string shaderPath = shaderName;
+        var shaderPath = shaderName;
+        
         if (!Path.HasExtension(shaderPath))
         {
             shaderPath += ".wgsl";
@@ -47,16 +48,16 @@ public sealed class Material
                 shaderPath = Path.Combine("Shaders", shaderPath);
         }
 
-        Shader shader = Shader.Load(shaderPath);
+        var shader = Shader.Load(shaderPath);
         return new Material(shader.Name, shader);
     }
 
     public Material Set<T>(string parameterName, T value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parameterName);
-        ShaderParameter parameter = Shader.Parameters.FirstOrDefault(p => p.Name == parameterName)
-            ?? throw new ArgumentException(
-                $"Shader '{Shader.Name}' has no parameter named '{parameterName}'.", nameof(parameterName));
+        var parameter = Shader.Parameters.FirstOrDefault(p => p.Name == parameterName)
+                        ?? throw new ArgumentException(
+                            $"Shader '{Shader.Name}' has no parameter named '{parameterName}'.", nameof(parameterName));
 
         if (!IsCompatible(parameter.Type, value))
             throw new ArgumentException(
@@ -68,7 +69,7 @@ public sealed class Material
 
     public bool TryGet<T>(string parameterName, out T value)
     {
-        if (_values.TryGetValue(parameterName, out object? raw) && raw is T typed)
+        if (_values.TryGetValue(parameterName, out var raw) && raw is T typed)
         {
             value = typed;
             return true;

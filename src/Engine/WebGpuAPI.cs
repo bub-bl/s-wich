@@ -1,10 +1,9 @@
-using System;
 using System.Runtime.InteropServices;
 using Silk.NET.WebGPU;
 
-namespace Crowbar;
+namespace Crowbar.Engine;
 
-internal static class WebGpuApi
+public static class WebGpuApi
 {
     public static WebGPU Wgpu { get; private set; } = null!;
     public static WebGpuInstance Instance { get; private set; } = null!;

@@ -1,8 +1,9 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
-using System.ComponentModel;
+using Crowbar.Engine;
 
-namespace Crowbar;
+namespace Crowbar.Editor;
 
 public partial class InspectorPanel : UserControl
 {

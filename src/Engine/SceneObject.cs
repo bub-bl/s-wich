@@ -1,8 +1,7 @@
-using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace Crowbar;
+namespace Crowbar.Engine;
 
 public class SceneObject : INotifyPropertyChanged
 {

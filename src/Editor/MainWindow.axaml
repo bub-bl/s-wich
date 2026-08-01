@@ -4,8 +4,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Crowbar"
         xmlns:chrome="clr-namespace:Avalonia.Controls.Chrome;assembly=Avalonia.Controls"
+        xmlns:editor="clr-namespace:Crowbar.Editor"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
-        x:Class="Crowbar.MainWindow"
+        x:Class="Crowbar.Editor.MainWindow"
         x:Name="RootWindow"
         Title=""
         Width="1280" Height="800"
@@ -104,7 +105,7 @@
                         <Button Content="▶ Play" x:Name="BtnPlay" Click="OnTogglePlayClick" Background="#2563EB" Foreground="White" Padding="12,4" FontWeight="SemiBold"/>
                     </Border>
                     <Border CornerRadius="6" ClipToBounds="True">
-                        <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Padding="8,4"/>
+                        <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}" Padding="8,4"/>
                     </Border>
                     <Border CornerRadius="6" ClipToBounds="True">
                         <Button Content="🎥 Reset Camera" Click="OnResetCameraClick" Padding="8,4"/>
@@ -134,7 +135,7 @@
         <Grid Grid.Row="2" ColumnDefinitions="260, 4, *, 4, 300">
 
             <!-- Left: Scene Hierarchy Panel -->
-            <local:HierarchyPanel Grid.Column="0" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=local:MainWindow}}"/>
+            <editor:HierarchyPanel Grid.Column="0" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"/>
 
             <!-- Splitter 1 -->
             <GridSplitter Grid.Column="1" Background="#27272A" ResizeDirection="Columns"/>
@@ -146,7 +147,7 @@
                   PointerMoved="OnViewportPointerMoved"
                   PointerReleased="OnViewportPointerReleased"
                   PointerWheelChanged="OnViewportPointerWheelChanged">
-                <local:SilkViewportControl x:Name="Viewport" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=local:MainWindow}}"/>
+                <editor:SilkViewportControl x:Name="Viewport" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"/>
 
                 <!-- HUD / Viewport Overlay -->
                 <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Padding="8,6" Background="#CC18181B" CornerRadius="6" IsHitTestVisible="False">
@@ -171,7 +172,7 @@
             <GridSplitter Grid.Column="3" Background="#27272A" ResizeDirection="Columns"/>
 
             <!-- Right: Inspector Panel -->
-            <local:InspectorPanel Grid.Column="4" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=local:MainWindow}}"/>
+            <editor:InspectorPanel Grid.Column="4" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"/>
 
         </Grid>
 
@@ -179,7 +180,7 @@
         <Border Grid.Row="4" Background="#09090B" Padding="8,2">
             <Grid ColumnDefinitions="Auto, *, Auto">
                 <TextBlock Grid.Column="0" Text="● Engine Ready" FontSize="10" Foreground="#22C55E"/>
-                <TextBlock Grid.Column="1" Text="{Binding Scene.SelectedObject.Name, StringFormat='Selected: {0}', RelativeSource={RelativeSource AncestorType=local:MainWindow}}"
+                <TextBlock Grid.Column="1" Text="{Binding Scene.SelectedObject.Name, StringFormat='Selected: {0}', RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"
                            FontSize="10" Foreground="#A1A1AA" HorizontalAlignment="Center"/>
                 <TextBlock Grid.Column="2" Text="Avalonia 12 + Silk.NET 2.23 (WGPU)" FontSize="10" Foreground="#71717A"/>
             </Grid>

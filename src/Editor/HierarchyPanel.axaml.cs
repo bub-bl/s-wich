@@ -1,10 +1,11 @@
-using Avalonia;
-using Avalonia.Controls;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Avalonia;
+using Avalonia.Controls;
+using Crowbar.Engine;
 
-namespace Crowbar;
+namespace Crowbar.Editor;
 
 public partial class HierarchyPanel : UserControl
 {
@@ -43,22 +44,22 @@ public partial class HierarchyPanel : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == SceneProperty)
+
+        if (change.Property != SceneProperty) return;
+        
+        if (change.OldValue is Scene oldScene)
         {
-            if (change.OldValue is Scene oldScene)
-            {
-                oldScene.Objects.CollectionChanged -= OnObjectsChanged;
-                oldScene.PropertyChanged -= OnScenePropertyChanged;
-            }
-
-            if (change.NewValue is Scene newScene)
-            {
-                newScene.Objects.CollectionChanged += OnObjectsChanged;
-                newScene.PropertyChanged += OnScenePropertyChanged;
-            }
-
-            RebuildTree();
+            oldScene.Objects.CollectionChanged -= OnObjectsChanged;
+            oldScene.PropertyChanged -= OnScenePropertyChanged;
         }
+
+        if (change.NewValue is Scene newScene)
+        {
+            newScene.Objects.CollectionChanged += OnObjectsChanged;
+            newScene.PropertyChanged += OnScenePropertyChanged;
+        }
+
+        RebuildTree();
     }
 
     private void OnObjectsChanged(object? sender, NotifyCollectionChangedEventArgs e) => RebuildTree();
@@ -93,7 +94,7 @@ public partial class HierarchyPanel : UserControl
         renderNode.Children.Add(new HierarchyNode("Main Camera", "◈", "Camera"));
         renderNode.Children.Add(new HierarchyNode("Sky", "☼", "Environment"));
 
-        foreach (SceneObject sceneObject in Scene.Objects)
+        foreach (var sceneObject in Scene.Objects)
         {
             var icon = sceneObject.MeshType == "Pyramid" ? "◆" : "■";
             var objectNode = new HierarchyNode(sceneObject.Name, icon, sceneObject.MeshType, sceneObject);
@@ -109,22 +110,26 @@ public partial class HierarchyPanel : UserControl
     private HierarchyNode? FindNode(SceneObject? sceneObject)
     {
         if (sceneObject == null || TreeRoots.Count == 0) return null;
+        
         foreach (var root in TreeRoots)
         {
             var found = FindNode(root, sceneObject);
             if (found != null) return found;
         }
+        
         return null;
     }
 
     private static HierarchyNode? FindNode(HierarchyNode node, SceneObject sceneObject)
     {
         if (node.SceneObject == sceneObject) return node;
+        
         foreach (var child in node.Children)
         {
             var found = FindNode(child, sceneObject);
             if (found != null) return found;
         }
+        
         return null;
     }
 }

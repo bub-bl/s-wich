@@ -1,7 +1,6 @@
-using System.IO;
 using System.Text.RegularExpressions;
 
-namespace Crowbar;
+namespace Crowbar.Engine;
 
 public enum ShaderStageKind
 {
@@ -15,7 +14,7 @@ public sealed record ShaderEntryPoint(string Name, ShaderStageKind Stage);
 /// <summary>
 /// A shader source loaded from a file shipped with the application.
 /// </summary>
-public sealed class Shader
+public sealed partial class Shader
 {
     private Shader(string requestedPath, string filePath, string source)
     {
@@ -42,8 +41,8 @@ public sealed class Shader
     public ShaderEntryPoint GetEntryPoint(string name)
     {
         return EntryPoints.FirstOrDefault(entry => entry.Name == name)
-            ?? throw new InvalidOperationException(
-                $"Shader '{Name}' does not contain an entry point named '{name}'.");
+               ?? throw new InvalidOperationException(
+                   $"Shader '{Name}' does not contain an entry point named '{name}'.");
     }
 
     public static Shader Load(string path)
@@ -73,16 +72,19 @@ public sealed class Shader
 
     private static IReadOnlyList<ShaderEntryPoint> DetectEntryPoints(string source)
     {
-        return [.. EntryPointPattern.Matches(source)
-            .Select(match => new ShaderEntryPoint(
-                match.Groups["name"].Value,
-                Enum.Parse<ShaderStageKind>(match.Groups["stage"].Value, ignoreCase: true)))];
+        return
+        [
+            .. EntryPointPattern.Matches(source)
+                .Select(match => new ShaderEntryPoint(
+                    match.Groups["name"].Value,
+                    Enum.Parse<ShaderStageKind>(match.Groups["stage"].Value, ignoreCase: true)))
+        ];
     }
 
     private static IReadOnlyList<ShaderParameter> DetectParameters(string source)
     {
-        Match uniform = UniformPattern.Match(source);
-        if (!uniform.Success) return Array.Empty<ShaderParameter>();
+        var uniform = UniformPattern.Match(source);
+        if (!uniform.Success) return [];
 
         return FieldPattern.Matches(uniform.Groups["body"].Value)
             .Select(match => TryParseParameter(match.Groups["name"].Value, match.Groups["type"].Value))
@@ -93,7 +95,7 @@ public sealed class Shader
 
     private static ShaderParameter? TryParseParameter(string name, string type)
     {
-        if (!Enum.TryParse(type switch
+        return !Enum.TryParse(type switch
         {
             "f32" => nameof(ShaderParameterType.Float),
             "vec2<f32>" => nameof(ShaderParameterType.Vector2),
@@ -103,23 +105,20 @@ public sealed class Shader
             "u32" => nameof(ShaderParameterType.UInt),
             "bool" => nameof(ShaderParameterType.Bool),
             _ => string.Empty
-        }, out ShaderParameterType parameterType))
-        {
-            return null;
-        }
-
-        return new ShaderParameter(name, parameterType);
+        }, out ShaderParameterType parameterType)
+            ? null
+            : new ShaderParameter(name, parameterType);
     }
 
-    private static readonly Regex EntryPointPattern = new(
-        @"(?m)^\s*@(?<stage>vertex|fragment|compute)\s+fn\s+(?<name>[A-Za-z_]\w*)\s*\(",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    [GeneratedRegex(@"(?m)^\s*@(?<stage>vertex|fragment|compute)\s+fn\s+(?<name>[A-Za-z_]\w*)\s*\(",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant)]
+    private static partial Regex EntryPointPattern { get; }
 
-    private static readonly Regex UniformPattern = new(
-        @"(?s)struct\s+\w*Uniforms\s*\{(?<body>.*?)\}",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    [GeneratedRegex(@"(?s)struct\s+\w*Uniforms\s*\{(?<body>.*?)\}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant)]
+    private static partial Regex UniformPattern { get; }
 
-    private static readonly Regex FieldPattern = new(
-        @"(?m)^\s*(?<name>[A-Za-z_]\w*)\s*:\s*(?<type>[A-Za-z0-9_<>]+)\s*,",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    [GeneratedRegex(@"(?m)^\s*(?<name>[A-Za-z_]\w*)\s*:\s*(?<type>[A-Za-z0-9_<>]+)\s*,",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant)]
+    private static partial Regex FieldPattern { get; }
 }

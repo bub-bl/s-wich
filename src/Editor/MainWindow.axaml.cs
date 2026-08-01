@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics;
 using System.Numerics;
 using Avalonia;
@@ -7,8 +6,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Crowbar.Engine;
 
-namespace Crowbar;
+namespace Crowbar.Editor;
 
 public partial class MainWindow : Window
 {

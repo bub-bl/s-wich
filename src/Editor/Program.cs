@@ -1,9 +1,8 @@
 ﻿using Avalonia;
-using System;
 
-namespace Crowbar;
+namespace Crowbar.Editor;
 
-class Program
+internal static class Program
 {
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
@@ -13,12 +12,12 @@ class Program
         .StartWithClassicDesktopLifetime(args);
 
     // Avalonia configuration, don't remove; also used by visual designer.
-    public static AppBuilder BuildAvaloniaApp()
+    private static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .With(new Win32PlatformOptions
             {
-                RenderingMode = new[] { Win32RenderingMode.Wgl, Win32RenderingMode.Software }
+                RenderingMode = [Win32RenderingMode.Wgl, Win32RenderingMode.Software]
             })
 #if DEBUG
             .WithDeveloperTools()

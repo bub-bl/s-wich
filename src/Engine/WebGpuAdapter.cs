@@ -1,8 +1,7 @@
-using System;
 using System.Runtime.InteropServices;
 using Silk.NET.WebGPU;
 
-namespace Crowbar;
+namespace Crowbar.Engine;
 
 public sealed unsafe class WebGpuAdapter : IDisposable
 {
