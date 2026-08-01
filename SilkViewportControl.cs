@@ -580,7 +580,7 @@ struct FragmentOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     let t = -in.near_point.y / (in.far_point.y - in.near_point.y);
-    if (t < 0.0) {
+    if (t < 0.0 || t > 1.0) {
         discard;
     }
 
@@ -592,6 +592,12 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let line = min(grid.x, grid.y);
+    // The grid is transparent between its lines.  Discarding those pixels is
+    // important because the grid is rendered after the meshes and must not
+    // cover objects through an otherwise invisible fragment.
+    if (line > 1.0) {
+        discard;
+    }
     let minimumz = min(derivative.y, 1.0);
     let minimumx = min(derivative.x, 1.0);
 
@@ -743,6 +749,17 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             WriteMask = ColorWriteMask.All
         };
 
+        var gridDepthStencilState = new DepthStencilState
+        {
+            Format = TextureFormat.Depth24Plus,
+            // The grid is rendered after the meshes. It can test mesh depth,
+            // but must not replace it or write depth between grid lines.
+            DepthWriteEnabled = false,
+            DepthCompare = CompareFunction.LessEqual,
+            StencilFront = new StencilFaceState { Compare = CompareFunction.Always },
+            StencilBack = new StencilFaceState { Compare = CompareFunction.Always }
+        };
+
         var gridFragmentState = new FragmentState
         {
             Module = _gridShaderModule,
@@ -767,7 +784,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                 FrontFace = FrontFace.Ccw,
                 CullMode = CullMode.None
             },
-            DepthStencil = &depthStencilState,
+            DepthStencil = &gridDepthStencilState,
             Multisample = new MultisampleState { Count = 1, Mask = 0xFFFFFFFF },
             Fragment = &gridFragmentState
         };
@@ -881,7 +898,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         RenderPassEncoder* pass = WebGpuApi.Wgpu.CommandEncoderBeginRenderPass(encoder, in renderPassDesc);
 
-        // A. Draw Infinite Grid
+        // Prepare the grid uniforms. The grid itself is drawn after the scene
+        // so mesh depth is already available to its depth test.
         GridUniforms gridUniforms = new GridUniforms
         {
             // System.Numerics uses row vectors. WGSL interprets the same
@@ -894,12 +912,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         };
         WebGpuApi.Wgpu.QueueWriteBuffer(_queue, _gridUniformBuffer, 0, &gridUniforms, (nuint)sizeof(GridUniforms));
 
-        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _gridPipeline);
-        WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, _gridBindGroup, 0, null);
-        WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _gridVbo, 0, (ulong)(6 * 3 * sizeof(float)));
-        WebGpuApi.Wgpu.RenderPassEncoderDraw(pass, 6, 1, 0, 0);
-
-        // B. Draw Scene Objects
+        // A. Draw Scene Objects
         WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _meshPipeline);
 
         Vector3 lightDir = Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.7f));
@@ -953,6 +966,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                 }
             }
         }
+
+        // B. Draw Infinite Grid. It uses depth testing without writing depth,
+        // and the shader discards the space between lines.
+        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _gridPipeline);
+        WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, _gridBindGroup, 0, null);
+        WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _gridVbo, 0, (ulong)(6 * 3 * sizeof(float)));
+        WebGpuApi.Wgpu.RenderPassEncoderDraw(pass, 6, 1, 0, 0);
 
         WebGpuApi.Wgpu.RenderPassEncoderEnd(pass);
 
