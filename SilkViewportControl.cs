@@ -18,6 +18,8 @@ namespace MyApp;
 public unsafe class SilkViewportControl : NativeControlHost
 {
     private nint _hwnd;
+    private nint _previousWndProc;
+    private NativeWndProc? _nativeWndProc;
     private Surface* _surface;
     private WebGpuAdapter? _adapter;
     private WebGpuDevice? _device;
@@ -124,15 +126,23 @@ public unsafe class SilkViewportControl : NativeControlHost
             const int WS_VISIBLE = 0x10000000;
             const int WS_CLIPCHILDREN = 0x02000000;
             const int WS_CLIPSIBLINGS = 0x04000000;
+            const int SS_NOTIFY = 0x00000100;
 
             _width = Math.Max(1, (int)Bounds.Width);
             _height = Math.Max(1, (int)Bounds.Height);
 
             _hwnd = CreateWindowExW(
                 0, "static", "SilkWebGpuHost",
-                WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | SS_NOTIFY,
                 0, 0, _width, _height,
                 parent.Handle, nint.Zero, nint.Zero, nint.Zero);
+
+            // NativeControlHost embeds a real HWND, so pointer events do not
+            // bubble through Avalonia. Subclass the child window to handle
+            // navigation input at the point where it is actually received.
+            _nativeWndProc = NativeWindowProc;
+            _previousWndProc = SetWindowLongPtr(_hwnd, GWLP_WNDPROC,
+                Marshal.GetFunctionPointerForDelegate(_nativeWndProc));
 
             InitWebGpu();
             StartRenderingLoop();
@@ -150,9 +160,17 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         if (OperatingSystem.IsWindows() && _hwnd != nint.Zero)
         {
+            if (_previousWndProc != nint.Zero)
+            {
+                SetWindowLongPtr(_hwnd, GWLP_WNDPROC, _previousWndProc);
+                _previousWndProc = nint.Zero;
+            }
+
             DestroyWindow(_hwnd);
             _hwnd = nint.Zero;
         }
+
+        _nativeWndProc = null;
 
         base.DestroyNativeControlCore(control);
     }
@@ -946,6 +964,97 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         e.Handled = true;
     }
 
+    private nint NativeWindowProc(nint hWnd, uint message, nint wParam, nint lParam)
+    {
+        switch (message)
+        {
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+                BeginNativeInteraction(orbit: true, GetMouseX(lParam), GetMouseY(lParam));
+                return nint.Zero;
+
+            case WM_MBUTTONDOWN:
+                BeginNativeInteraction(orbit: false, GetMouseX(lParam), GetMouseY(lParam));
+                return nint.Zero;
+
+            case WM_MOUSEMOVE:
+                if (_isOrbiting || _isPanning)
+                {
+                    UpdateCamera(GetMouseX(lParam), GetMouseY(lParam));
+                    return nint.Zero;
+                }
+                break;
+
+            case WM_LBUTTONUP:
+            case WM_RBUTTONUP:
+            case WM_MBUTTONUP:
+                if (_isOrbiting || _isPanning)
+                {
+                    EndNativeInteraction();
+                    return nint.Zero;
+                }
+                break;
+
+            case WM_MOUSEWHEEL:
+                ApplyZoom((short)((long)wParam >> 16));
+                return nint.Zero;
+        }
+
+        return CallWindowProc(_previousWndProc, hWnd, message, wParam, lParam);
+    }
+
+    private void BeginNativeInteraction(bool orbit, int x, int y)
+    {
+        Focus();
+        _isOrbiting = orbit;
+        _isPanning = !orbit;
+        _lastMousePos = new Point(x, y);
+        SetCapture(_hwnd);
+    }
+
+    private void UpdateCamera(int x, int y)
+    {
+        Point current = new(x, y);
+        Point delta = current - _lastMousePos;
+        _lastMousePos = current;
+
+        if (Scene == null) return;
+
+        if (_isOrbiting)
+        {
+            Scene.CameraYaw += (float)delta.X * 0.4f;
+            Scene.CameraPitch = Math.Clamp(Scene.CameraPitch + (float)delta.Y * 0.4f, -89f, 89f);
+        }
+        else if (_isPanning)
+        {
+            float sensitivity = Scene.CameraDistance * 0.002f;
+            float yawRad = MathF.PI / 180f * Scene.CameraYaw;
+            Vector3 right = new(MathF.Cos(yawRad), 0, -MathF.Sin(yawRad));
+            Vector3 panOffset = (right * (float)-delta.X + Vector3.UnitY * (float)delta.Y) * sensitivity;
+            Scene.CameraTargetX += panOffset.X;
+            Scene.CameraTargetY += panOffset.Y;
+            Scene.CameraTargetZ += panOffset.Z;
+        }
+    }
+
+    private void EndNativeInteraction()
+    {
+        _isOrbiting = false;
+        _isPanning = false;
+        ReleaseCapture();
+    }
+
+    private void ApplyZoom(float wheelDelta)
+    {
+        if (Scene != null)
+        {
+            Scene.CameraDistance = Math.Clamp(Scene.CameraDistance - wheelDelta / 120f * 0.5f, 1.0f, 50.0f);
+        }
+    }
+
+    private static int GetMouseX(nint lParam) => (short)((long)lParam & 0xFFFF);
+    private static int GetMouseY(nint lParam) => (short)(((long)lParam >> 16) & 0xFFFF);
+
     private void CleanupWebGpu()
     {
         if (_depthTextureView != null) WebGpuApi.Wgpu.TextureViewRelease(_depthTextureView);
@@ -990,4 +1099,28 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    private delegate nint NativeWndProc(nint hWnd, uint message, nint wParam, nint lParam);
+
+    private const int GWLP_WNDPROC = -4;
+    private const uint WM_LBUTTONDOWN = 0x0201;
+    private const uint WM_LBUTTONUP = 0x0202;
+    private const uint WM_RBUTTONDOWN = 0x0204;
+    private const uint WM_RBUTTONUP = 0x0205;
+    private const uint WM_MBUTTONDOWN = 0x0207;
+    private const uint WM_MBUTTONUP = 0x0208;
+    private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_MOUSEWHEEL = 0x020A;
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern nint SetWindowLongPtr(nint hWnd, int index, nint newValue);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern nint CallWindowProc(nint previousWndProc, nint hWnd, uint message, nint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern nint SetCapture(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
 }
