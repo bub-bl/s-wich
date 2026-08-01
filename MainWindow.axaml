@@ -189,7 +189,7 @@
         <Border x:Name="AssetsDrawerAnchor" Grid.RowSpan="5" Height="1" VerticalAlignment="Bottom"
                 IsHitTestVisible="False" Background="Transparent"/>
 
-        <Popup x:Name="AssetsDrawerPopup" Grid.RowSpan="5" IsOpen="True" Placement="Top"
+        <Popup x:Name="AssetsDrawerPopup" Grid.RowSpan="5" IsOpen="False" Placement="Top"
                HorizontalAlignment="Stretch">
             <Border x:Name="AssetsDrawer" Height="360" Margin="8" Background="#18181B" BorderBrush="#3F3F46"
                     BorderThickness="1" CornerRadius="8,8,0,0" BoxShadow="0 -2 8 0 #55000000">

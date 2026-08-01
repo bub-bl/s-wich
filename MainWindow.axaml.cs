@@ -31,7 +31,6 @@ public partial class MainWindow : Window
         AssetsDrawerPopup.PlacementTarget = AssetsDrawerAnchor;
         UpdateAssetsDrawerWidth();
         AssetsDrawer.RenderTransform = new TranslateTransform(0, 360);
-        AssetsDrawer.IsHitTestVisible = false;
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         SizeChanged += OnMainWindowSizeChanged;
 
@@ -217,7 +216,9 @@ public partial class MainWindow : Window
     private void SetAssetsDrawerOpen(bool isOpen)
     {
         _isAssetsDrawerOpen = isOpen;
-        AssetsDrawer.IsHitTestVisible = isOpen;
+        // Do not keep a closed Popup alive: its native/layout surface can still
+        // intercept pointer input even when its content is translated off-screen.
+        AssetsDrawerPopup.IsOpen = isOpen;
         AnimateAssetsDrawer(isOpen ? 0 : AssetsDrawer.Height);
     }
 
