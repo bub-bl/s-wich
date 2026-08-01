@@ -56,6 +56,12 @@ public unsafe class SilkViewportControl : NativeControlHost
     private Point _lastMousePos;
     private bool _isOrbiting;
     private bool _isPanning;
+    private bool _moveForward;
+    private bool _moveBackward;
+    private bool _moveLeft;
+    private bool _moveRight;
+
+    private const float CameraMoveSpeed = 5.0f;
 
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private double _lastFrameTime;
@@ -126,6 +132,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             const int WS_VISIBLE = 0x10000000;
             const int WS_CLIPCHILDREN = 0x02000000;
             const int WS_CLIPSIBLINGS = 0x04000000;
+            const int WS_TABSTOP = 0x00010000;
             const int SS_NOTIFY = 0x00000100;
 
             _width = Math.Max(1, (int)Bounds.Width);
@@ -133,7 +140,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
             _hwnd = CreateWindowExW(
                 0, "static", "SilkWebGpuHost",
-                WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | SS_NOTIFY,
+                WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP | SS_NOTIFY,
                 0, 0, _width, _height,
                 parent.Handle, nint.Zero, nint.Zero, nint.Zero);
 
@@ -750,6 +757,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         double deltaTime = currentTime - _lastFrameTime;
         _lastFrameTime = currentTime;
 
+        UpdateKeyboardMovement((float)Math.Clamp(deltaTime, 0.0, 0.1));
+
         _frameCount++;
         _fpsTimer += deltaTime;
         if (_fpsTimer >= 0.5)
@@ -964,10 +973,63 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         e.Handled = true;
     }
 
+    private void UpdateKeyboardMovement(float deltaTime)
+    {
+        if (Scene == null || deltaTime <= 0f) return;
+
+        // The WebGPU viewport is hosted in a native child HWND. Polling the
+        // keys while that HWND owns focus avoids depending on Avalonia's
+        // routed keyboard events crossing the native-control boundary.
+        if (_hwnd != nint.Zero && GetFocus() == _hwnd)
+        {
+            SetMovementKey(VK_W, IsKeyDown(VK_W));
+            SetMovementKey(VK_A, IsKeyDown(VK_A));
+            SetMovementKey(VK_S, IsKeyDown(VK_S));
+            SetMovementKey(VK_D, IsKeyDown(VK_D));
+        }
+        else
+        {
+            ClearMovementKeys();
+        }
+
+        float forwardInput = (_moveForward ? 1f : 0f) - (_moveBackward ? 1f : 0f);
+        float strafeInput = (_moveRight ? 1f : 0f) - (_moveLeft ? 1f : 0f);
+        if (forwardInput == 0f && strafeInput == 0f) return;
+
+        float yawRad = MathF.PI / 180f * Scene.CameraYaw;
+        Vector3 forward = new(-MathF.Sin(yawRad), 0f, -MathF.Cos(yawRad));
+        Vector3 right = new(MathF.Cos(yawRad), 0f, -MathF.Sin(yawRad));
+        Vector3 direction = forward * forwardInput + right * strafeInput;
+
+        // Keep diagonal movement at the same speed as axial movement.
+        if (direction.LengthSquared() > 1f)
+        {
+            direction = Vector3.Normalize(direction);
+        }
+
+        Vector3 offset = direction * CameraMoveSpeed * deltaTime;
+        Scene.CameraTargetX += offset.X;
+        Scene.CameraTargetZ += offset.Z;
+    }
+
     private nint NativeWindowProc(nint hWnd, uint message, nint wParam, nint lParam)
     {
         switch (message)
         {
+            case WM_KEYDOWN:
+                SetMovementKey((int)wParam, true);
+                if (IsMovementKey((int)wParam)) return nint.Zero;
+                break;
+
+            case WM_KEYUP:
+                SetMovementKey((int)wParam, false);
+                if (IsMovementKey((int)wParam)) return nint.Zero;
+                break;
+
+            case WM_KILLFOCUS:
+                ClearMovementKeys();
+                break;
+
             case WM_LBUTTONDOWN:
             case WM_RBUTTONDOWN:
                 BeginNativeInteraction(orbit: true, GetMouseX(lParam), GetMouseY(lParam));
@@ -1003,9 +1065,32 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         return CallWindowProc(_previousWndProc, hWnd, message, wParam, lParam);
     }
 
+    private void SetMovementKey(int key, bool isDown)
+    {
+        switch (key)
+        {
+            case VK_W: _moveForward = isDown; break;
+            case VK_S: _moveBackward = isDown; break;
+            case VK_A: _moveLeft = isDown; break;
+            case VK_D: _moveRight = isDown; break;
+        }
+    }
+
+    private static bool IsMovementKey(int key) =>
+        key is VK_W or VK_S or VK_A or VK_D;
+
+    private void ClearMovementKeys()
+    {
+        _moveForward = false;
+        _moveBackward = false;
+        _moveLeft = false;
+        _moveRight = false;
+    }
+
     private void BeginNativeInteraction(bool orbit, int x, int y)
     {
         Focus();
+        SetFocus(_hwnd);
         _isOrbiting = orbit;
         _isPanning = !orbit;
         _lastMousePos = new Point(x, y);
@@ -1054,6 +1139,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     private static int GetMouseX(nint lParam) => (short)((long)lParam & 0xFFFF);
     private static int GetMouseY(nint lParam) => (short)(((long)lParam >> 16) & 0xFFFF);
+    private static bool IsKeyDown(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
 
     private void CleanupWebGpu()
     {
@@ -1111,6 +1197,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     private const uint WM_MBUTTONUP = 0x0208;
     private const uint WM_MOUSEMOVE = 0x0200;
     private const uint WM_MOUSEWHEEL = 0x020A;
+    private const uint WM_KEYDOWN = 0x0100;
+    private const uint WM_KEYUP = 0x0101;
+    private const uint WM_KILLFOCUS = 0x0008;
+    private const int VK_W = 0x57;
+    private const int VK_A = 0x41;
+    private const int VK_S = 0x53;
+    private const int VK_D = 0x44;
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     private static extern nint SetWindowLongPtr(nint hWnd, int index, nint newValue);
@@ -1120,6 +1213,15 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     [DllImport("user32.dll")]
     private static extern nint SetCapture(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern nint SetFocus(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetFocus();
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
