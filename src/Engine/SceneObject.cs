@@ -22,6 +22,7 @@ public class SceneObject : INotifyPropertyChanged
     private bool _isVisible = true;
     private bool _isSelected;
     private string _meshType = "Cube";
+    private Model? _model;
     private Material? _material;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -126,6 +127,16 @@ public class SceneObject : INotifyPropertyChanged
     {
         get => _meshType;
         set => SetField(ref _meshType, value);
+    }
+
+    /// <summary>
+    /// Optional imported model. When set, the renderer uses it instead of the
+    /// built-in cube or pyramid selected by <see cref="MeshType"/>.
+    /// </summary>
+    public Model? Model
+    {
+        get => _model;
+        set => SetField(ref _model, value);
     }
 
     public Material? Material

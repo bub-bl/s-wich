@@ -61,6 +61,12 @@ internal unsafe abstract class MeshRenderPass
             };
         }
 
+        if (obj.Model != null && resources.ModelMeshes.Count > 0)
+        {
+            DrawModel(context.Pass, resources, context.Wireframe);
+            return;
+        }
+
         bool pyramid = obj.MeshType == "Pyramid";
         Buffer* vertexBuffer = pyramid ? context.PyramidVertexBuffer : context.CubeVertexBuffer;
         Buffer* indexBuffer = pyramid
@@ -75,6 +81,23 @@ internal unsafe abstract class MeshRenderPass
         WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(context.Pass, indexBuffer, IndexFormat.Uint16, 0,
             (ulong)(indexCount * sizeof(ushort)));
         WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(context.Pass, indexCount, 1, 0, 0, 0);
+    }
+
+    internal static void DrawModel(MeshRenderContext context, MeshGpuResources resources)
+        => DrawModel(context.Pass, resources, context.Wireframe);
+
+    internal static void DrawModel(RenderPassEncoder* pass, MeshGpuResources resources, bool wireframe)
+    {
+        foreach (ModelGpuMesh mesh in resources.ModelMeshes)
+        {
+            Buffer* indexBuffer = wireframe ? mesh.WireframeIndexBuffer : mesh.IndexBuffer;
+            uint indexCount = wireframe ? mesh.WireframeIndexCount : mesh.IndexCount;
+            WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, mesh.VertexBuffer, 0,
+                mesh.VertexBufferSize);
+            WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint32, 0,
+                (ulong)(indexCount * sizeof(uint)));
+            WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
+        }
     }
 }
 

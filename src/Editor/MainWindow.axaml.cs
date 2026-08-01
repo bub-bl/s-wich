@@ -90,6 +90,35 @@ public partial class MainWindow : Window
         Scene.Objects.Add(cube2);
         Scene.Objects.Add(pyramid);
 
+        const string modelPath = "Assets/model.obj";
+        if (File.Exists(modelPath) || File.Exists(Path.Combine(AppContext.BaseDirectory, modelPath)))
+        {
+            try
+            {
+                var modelObject = new SceneObject
+                {
+                    Name = "Imported Model",
+                    Model = Model.Load(modelPath),
+                    PositionX = 0f,
+                    PositionY = 0.5f,
+                    PositionZ = -2f,
+                    ScaleX = 1f,
+                    ScaleY = 1f,
+                    ScaleZ = 1f,
+                    ColorR = 0.85f,
+                    ColorG = 0.75f,
+                    ColorB = 0.35f,
+                    MeshType = "Model"
+                };
+                Scene.Objects.Add(modelObject);
+                Log($"Loaded model: {modelPath}");
+            }
+            catch (Exception exception) when (exception is IOException or FormatException)
+            {
+                Log($"Could not load model '{modelPath}': {exception.Message}");
+            }
+        }
+
         Scene.SelectedObject = cube1;
     }
 

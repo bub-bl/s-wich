@@ -21,6 +21,17 @@ internal unsafe sealed class MeshGpuResources
 {
     public Buffer* UniformBuffer;
     public BindGroup* BindGroup;
+    public List<ModelGpuMesh> ModelMeshes { get; } = [];
+}
+
+internal unsafe sealed class ModelGpuMesh
+{
+    public Buffer* VertexBuffer;
+    public ulong VertexBufferSize;
+    public Buffer* IndexBuffer;
+    public Buffer* WireframeIndexBuffer;
+    public uint IndexCount;
+    public uint WireframeIndexCount;
 }
 
 internal sealed class SelectionRenderData

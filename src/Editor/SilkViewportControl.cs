@@ -459,6 +459,52 @@ public unsafe class SilkViewportControl : NativeControlHost
             UniformBuffer = uniformBuffer,
             BindGroup = WebGpuApi.Wgpu.DeviceCreateBindGroup(_device!, in bindGroupDesc)
         };
+
+        if (obj.Model != null)
+        {
+            foreach (ModelMesh mesh in obj.Model.Meshes)
+            {
+                if (mesh.Positions.Count == 0 || mesh.Indices.Count == 0) continue;
+
+                float[] vertices = new float[mesh.Positions.Count * 6];
+                for (int i = 0; i < mesh.Positions.Count; i++)
+                {
+                    Vector3 position = mesh.Positions[i];
+                    Vector3 normal = i < mesh.Normals.Count ? mesh.Normals[i] : Vector3.UnitY;
+                    int offset = i * 6;
+                    vertices[offset] = position.X;
+                    vertices[offset + 1] = position.Y;
+                    vertices[offset + 2] = position.Z;
+                    vertices[offset + 3] = normal.X;
+                    vertices[offset + 4] = normal.Y;
+                    vertices[offset + 5] = normal.Z;
+                }
+
+                uint[] indices = mesh.Indices.Select(index => checked((uint)index)).ToArray();
+                uint[] wireframeIndices = new uint[indices.Length * 2];
+                for (int i = 0; i < indices.Length; i += 3)
+                {
+                    int offset = i * 2;
+                    wireframeIndices[offset] = indices[i];
+                    wireframeIndices[offset + 1] = indices[i + 1];
+                    wireframeIndices[offset + 2] = indices[i + 1];
+                    wireframeIndices[offset + 3] = indices[i + 2];
+                    wireframeIndices[offset + 4] = indices[i + 2];
+                    wireframeIndices[offset + 5] = indices[i];
+                }
+
+                resources.ModelMeshes.Add(new ModelGpuMesh
+                {
+                    VertexBuffer = CreateGpuBuffer(vertices, BufferUsage.Vertex),
+                    VertexBufferSize = (ulong)(vertices.Length * sizeof(float)),
+                    IndexBuffer = CreateGpuBuffer(indices, BufferUsage.Index),
+                    WireframeIndexBuffer = CreateGpuBuffer(wireframeIndices, BufferUsage.Index),
+                    IndexCount = (uint)indices.Length,
+                    WireframeIndexCount = (uint)wireframeIndices.Length
+                });
+            }
+        }
+
         _meshResources.Add(obj, resources);
         return resources;
     }
@@ -487,6 +533,13 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void ReleaseMeshResources(MeshGpuResources resources)
     {
+        foreach (ModelGpuMesh mesh in resources.ModelMeshes)
+        {
+            ReleaseBuffer(mesh.VertexBuffer);
+            ReleaseBuffer(mesh.IndexBuffer);
+            ReleaseBuffer(mesh.WireframeIndexBuffer);
+        }
+
         if (resources.BindGroup != null)
         {
             WebGpuApi.Wgpu.BindGroupRelease(resources.BindGroup);
@@ -496,6 +549,15 @@ public unsafe class SilkViewportControl : NativeControlHost
         {
             WebGpuApi.Wgpu.BufferDestroy(resources.UniformBuffer);
             WebGpuApi.Wgpu.BufferRelease(resources.UniformBuffer);
+        }
+    }
+
+    private void ReleaseBuffer(Buffer* buffer)
+    {
+        if (buffer != null)
+        {
+            WebGpuApi.Wgpu.BufferDestroy(buffer);
+            WebGpuApi.Wgpu.BufferRelease(buffer);
         }
     }
 
@@ -972,32 +1034,24 @@ public unsafe class SilkViewportControl : NativeControlHost
 
             WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
             WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
-            if (selection.Object.MeshType == "Pyramid")
+            if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
-                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+                MeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
             }
             else
             {
-                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
-                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+                DrawSelectionPrimitive(pass, selection.Object);
             }
 
             WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
             WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
-            if (selection.Object.MeshType == "Pyramid")
+            if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
-                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+                MeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
             }
             else
             {
-                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
-                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+                DrawSelectionPrimitive(pass, selection.Object);
             }
         }
 
@@ -1010,6 +1064,22 @@ public unsafe class SilkViewportControl : NativeControlHost
         WebGpuApi.Wgpu.TextureViewRelease(targetView);
         WebGpuApi.Wgpu.CommandBufferRelease(cmdBuffer);
         WebGpuApi.Wgpu.CommandEncoderRelease(encoder);
+    }
+
+    private void DrawSelectionPrimitive(RenderPassEncoder* pass, SceneObject obj)
+    {
+        if (obj.MeshType == "Pyramid")
+        {
+            WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
+            WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
+            WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+        }
+        else
+        {
+            WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
+            WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
+            WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+        }
     }
 
     private Vector4 GetMaterialColor(SceneObject obj)
