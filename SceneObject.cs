@@ -23,6 +23,7 @@ public class SceneObject : INotifyPropertyChanged
     private bool _isVisible = true;
     private bool _isSelected;
     private string _meshType = "Cube";
+    private Material? _material;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -126,6 +127,12 @@ public class SceneObject : INotifyPropertyChanged
     {
         get => _meshType;
         set => SetField(ref _meshType, value);
+    }
+
+    public Material? Material
+    {
+        get => _material;
+        set => SetField(ref _material, value);
     }
 
     protected void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

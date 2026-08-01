@@ -32,6 +32,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private ShaderModule* _meshShaderModule;
     private ShaderModule* _gridShaderModule;
+    private Shader? _meshShader;
 
     private RenderPipeline* _meshPipeline;
     private RenderPipeline* _wireframePipeline;
@@ -517,6 +518,7 @@ public unsafe class SilkViewportControl : NativeControlHost
         if (_device == null) return;
 
         var meshShader = Shader.Load("Shaders/Mesh.wgsl");
+        _meshShader = meshShader;
         var gridShader = Shader.Load("Shaders/Grid.wgsl");
         _meshShaderModule = CreateShaderModule(meshShader);
         _gridShaderModule = CreateShaderModule(gridShader);
@@ -907,8 +909,8 @@ public unsafe class SilkViewportControl : NativeControlHost
                     Model = model,
                     View = view,
                     Proj = proj,
-                    Color = new Vector4(obj.ColorR, obj.ColorG, obj.ColorB, obj.ColorA),
-                    LightDir = lightDir,
+                    Color = GetMaterialColor(obj),
+                    LightDir = GetMaterialLightDirection(obj, lightDir),
                     IsSelected = wireframe && obj.IsSelected ? 1u : 0u
                 };
 
@@ -960,8 +962,8 @@ public unsafe class SilkViewportControl : NativeControlHost
                 Model = outlineModel,
                 View = view,
                 Proj = proj,
-                Color = new Vector4(outlineObject.ColorR, outlineObject.ColorG, outlineObject.ColorB, outlineObject.ColorA),
-                LightDir = lightDir,
+                Color = GetMaterialColor(outlineObject),
+                LightDir = GetMaterialLightDirection(outlineObject, lightDir),
                 IsSelected = 0u
             };
             WebGpuApi.Wgpu.QueueWriteBuffer(_queue, outlineResources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
@@ -1006,6 +1008,28 @@ public unsafe class SilkViewportControl : NativeControlHost
         WebGpuApi.Wgpu.TextureViewRelease(targetView);
         WebGpuApi.Wgpu.CommandBufferRelease(cmdBuffer);
         WebGpuApi.Wgpu.CommandEncoderRelease(encoder);
+    }
+
+    private Vector4 GetMaterialColor(SceneObject obj)
+    {
+        if (obj.Material != null && ReferenceEquals(obj.Material.Shader, _meshShader) &&
+            obj.Material.TryGet("color", out Vector4 color))
+        {
+            return color;
+        }
+
+        return new Vector4(obj.ColorR, obj.ColorG, obj.ColorB, obj.ColorA);
+    }
+
+    private Vector3 GetMaterialLightDirection(SceneObject obj, Vector3 fallback)
+    {
+        if (obj.Material != null && ReferenceEquals(obj.Material.Shader, _meshShader) &&
+            obj.Material.TryGet("lightDir", out Vector3 lightDirection))
+        {
+            return lightDirection;
+        }
+
+        return fallback;
     }
 
     private void HandlePointerPressed(PointerPressedEventArgs e)
