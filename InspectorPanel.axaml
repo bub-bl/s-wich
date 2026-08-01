@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:Crowbar"
+             mc:Ignorable="d"
+             x:Class="Crowbar.InspectorPanel">
+    <Border Background="#1F1F23" BorderBrush="#27272A" BorderThickness="1,0,0,0">
+        <Grid RowDefinitions="Auto, *">
+            <Border Grid.Row="0" Background="#27272A" Padding="10,6">
+                <TextBlock Text="INSPECTOR" FontWeight="Bold" FontSize="11" Foreground="#A1A1AA" LetterSpacing="1"/>
+            </Border>
+            <ScrollViewer Grid.Row="1" Padding="12">
+                <StackPanel Spacing="12" DataContext="{Binding Scene.SelectedObject, RelativeSource={RelativeSource AncestorType=local:InspectorPanel}}">
+                    <StackPanel.Styles>
+                        <Style Selector="TextBlock.Header">
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="FontSize" Value="12"/>
+                            <Setter Property="Foreground" Value="#9CA3AF"/>
+                        </Style>
+                        <Style Selector="TextBlock.Label">
+                            <Setter Property="Width" Value="24"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                        </Style>
+                    </StackPanel.Styles>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Object Name" Classes="Header"/>
+                        <TextBox Text="{Binding Name, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <Separator Background="#27272A"/>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="TRANSFORM" Classes="Header"/>
+                        <TextBlock Text="Position" FontSize="11" Foreground="#6B7280"/>
+                        <Grid ColumnDefinitions="*, *, *">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,4,0">
+                                <TextBlock Text="X" Classes="Label" Foreground="#EF4444"/>
+                                <NumericUpDown Value="{Binding PositionX, Mode=TwoWay}" Increment="0.1" FormatString="F2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="2,0,2,0">
+                                <TextBlock Text="Y" Classes="Label" Foreground="#10B981"/>
+                                <NumericUpDown Value="{Binding PositionY, Mode=TwoWay}" Increment="0.1" FormatString="F2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,0,0">
+                                <TextBlock Text="Z" Classes="Label" Foreground="#3B82F6"/>
+                                <NumericUpDown Value="{Binding PositionZ, Mode=TwoWay}" Increment="0.1" FormatString="F2"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="Rotation (Degrees)" FontSize="11" Foreground="#6B7280" Margin="0,4,0,0"/>
+                        <Grid ColumnDefinitions="*, *, *">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,4,0">
+                                <TextBlock Text="X" Classes="Label" Foreground="#EF4444"/>
+                                <NumericUpDown Value="{Binding RotationX, Mode=TwoWay}" Increment="5.0" FormatString="F1"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="2,0,2,0">
+                                <TextBlock Text="Y" Classes="Label" Foreground="#10B981"/>
+                                <NumericUpDown Value="{Binding RotationY, Mode=TwoWay}" Increment="5.0" FormatString="F1"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,0,0">
+                                <TextBlock Text="Z" Classes="Label" Foreground="#3B82F6"/>
+                                <NumericUpDown Value="{Binding RotationZ, Mode=TwoWay}" Increment="5.0" FormatString="F1"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="Scale" FontSize="11" Foreground="#6B7280" Margin="0,4,0,0"/>
+                        <Grid ColumnDefinitions="*, *, *">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,4,0">
+                                <TextBlock Text="X" Classes="Label" Foreground="#EF4444"/>
+                                <NumericUpDown Value="{Binding ScaleX, Mode=TwoWay}" Increment="0.1" FormatString="F2" Minimum="0.01"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="2,0,2,0">
+                                <TextBlock Text="Y" Classes="Label" Foreground="#10B981"/>
+                                <NumericUpDown Value="{Binding ScaleY, Mode=TwoWay}" Increment="0.1" FormatString="F2" Minimum="0.01"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,0,0">
+                                <TextBlock Text="Z" Classes="Label" Foreground="#3B82F6"/>
+                                <NumericUpDown Value="{Binding ScaleZ, Mode=TwoWay}" Increment="0.1" FormatString="F2" Minimum="0.01"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <Separator Background="#27272A"/>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="MATERIAL &amp; COLOR" Classes="Header"/>
+                        <Grid ColumnDefinitions="*, *">
+                            <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                <TextBlock Text="Red" FontSize="11"/>
+                                <Slider Value="{Binding ColorR, Mode=TwoWay}" Minimum="0" Maximum="1"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                <TextBlock Text="Green" FontSize="11"/>
+                                <Slider Value="{Binding ColorG, Mode=TwoWay}" Minimum="0" Maximum="1"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid ColumnDefinitions="*, *">
+                            <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                <TextBlock Text="Blue" FontSize="11"/>
+                                <Slider Value="{Binding ColorB, Mode=TwoWay}" Minimum="0" Maximum="1"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                <TextBlock Text="Alpha" FontSize="11"/>
+                                <Slider Value="{Binding ColorA, Mode=TwoWay}" Minimum="0" Maximum="1"/>
+                            </StackPanel>
+                        </Grid>
+                        <CheckBox Content="Is Visible" IsChecked="{Binding IsVisible, Mode=TwoWay}"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>
