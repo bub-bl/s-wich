@@ -1016,17 +1016,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, wireframe ? _wireframePipeline : _meshPipeline);
 
         Vector3 lightDir = Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.7f));
+        SceneObject? outlineObject = null;
+        Matrix4x4 outlineModel = default;
+        MeshGpuResources? outlineResources = null;
 
         if (Scene != null)
         {
             CleanupMeshResources();
-
-            // Keep the selected object's transform and GPU resources for a
-            // second pass.  Drawing the outline inside this loop lets a later
-            // object overwrite it (notably the green pyramid in the editor).
-            SceneObject? outlineObject = null;
-            Matrix4x4 outlineModel = default;
-            MeshGpuResources? outlineResources = null;
 
             foreach (var obj in Scene.Objects)
             {
@@ -1084,55 +1080,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                 }
 
             }
-
-            // Draw selection after every scene object so later meshes cannot
-            // cover the highlight.  The outline pipeline also uses an Always
-            // depth comparison because the highlight is intentionally an
-            // overlay rather than another occludable mesh.
-            if (outlineObject != null && outlineResources != null)
-            {
-                MeshUniforms outlineUniforms = new MeshUniforms
-                {
-                    Model = outlineModel,
-                    View = view,
-                    Proj = proj,
-                    Color = new Vector4(outlineObject.ColorR, outlineObject.ColorG, outlineObject.ColorB, outlineObject.ColorA),
-                    LightDir = lightDir,
-                    IsSelected = 0u
-                };
-                WebGpuApi.Wgpu.QueueWriteBuffer(_queue, outlineResources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
-
-                WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
-                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
-                if (outlineObject.MeshType == "Pyramid")
-                {
-                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
-                }
-                else
-                {
-                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
-                }
-
-                WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
-                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
-
-                if (outlineObject.MeshType == "Pyramid")
-                {
-                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
-                }
-                else
-                {
-                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
-                }
-            }
         }
 
         // B. Draw Infinite Grid. It uses depth testing without writing depth,
@@ -1141,6 +1088,53 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, _gridBindGroup, 0, null);
         WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _gridVbo, 0, (ulong)(6 * 3 * sizeof(float)));
         WebGpuApi.Wgpu.RenderPassEncoderDraw(pass, 6, 1, 0, 0);
+
+        // C. Draw the selection overlay after the grid.  The grid therefore
+        // uses the original scene depth, while the overlay can still mask
+        // itself with the selected object's depth.
+        if (outlineObject != null && outlineResources != null)
+        {
+            MeshUniforms outlineUniforms = new MeshUniforms
+            {
+                Model = outlineModel,
+                View = view,
+                Proj = proj,
+                Color = new Vector4(outlineObject.ColorR, outlineObject.ColorG, outlineObject.ColorB, outlineObject.ColorA),
+                LightDir = lightDir,
+                IsSelected = 0u
+            };
+            WebGpuApi.Wgpu.QueueWriteBuffer(_queue, outlineResources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
+
+            WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
+            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
+            if (outlineObject.MeshType == "Pyramid")
+            {
+                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
+                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
+                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+            }
+            else
+            {
+                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
+                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
+                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+            }
+
+            WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
+            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
+            if (outlineObject.MeshType == "Pyramid")
+            {
+                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
+                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
+                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+            }
+            else
+            {
+                WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
+                WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
+                WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+            }
+        }
 
         WebGpuApi.Wgpu.RenderPassEncoderEnd(pass);
 
