@@ -5,7 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 
-namespace MyApp;
+namespace Crowbar;
 
 public partial class MainWindow : Window
 {

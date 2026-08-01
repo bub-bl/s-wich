@@ -2,10 +2,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:MyApp"
+        xmlns:local="clr-namespace:Crowbar"
         xmlns:chrome="clr-namespace:Avalonia.Controls.Chrome;assembly=Avalonia.Controls"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
-        x:Class="MyApp.MainWindow"
+        x:Class="Crowbar.MainWindow"
         Title=""
         Width="1280" Height="800"
         WindowDecorations="Full"
@@ -73,7 +73,7 @@
                 <Grid x:Name="TitleBarDragArea" Grid.Column="1" Background="Transparent"
                       chrome:WindowDecorationProperties.ElementRole="TitleBar"
                       PointerPressed="OnTitleBarPointerPressed">
-                    <TextBlock Text="Silk.NET Sandbox Engine Editor" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    <TextBlock Text="Crowbar Engine" HorizontalAlignment="Center" VerticalAlignment="Center"
                                FontSize="12" Foreground="#D4D4D8" IsHitTestVisible="False"/>
                 </Grid>
             </Grid>

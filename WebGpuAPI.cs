@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using Silk.NET.WebGPU;
 
-namespace MyApp;
+namespace Crowbar;
 
 internal static class WebGpuApi
 {

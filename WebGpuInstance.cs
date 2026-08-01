@@ -1,7 +1,7 @@
 using System;
 using Silk.NET.WebGPU;
 
-namespace MyApp;
+namespace Crowbar;
 
 public sealed class WebGpuInstance : IDisposable
 {

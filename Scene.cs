@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace MyApp;
+namespace Crowbar;
 
 public class Scene : INotifyPropertyChanged
 {
