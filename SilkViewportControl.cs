@@ -516,162 +516,10 @@ public unsafe class SilkViewportControl : NativeControlHost
     {
         if (_device == null) return;
 
-        // 1. Mesh WGSL Shader Code
-        const string meshWgsl = @"
-struct MeshUniforms {
-    model: mat4x4<f32>,
-    view: mat4x4<f32>,
-    proj: mat4x4<f32>,
-    color: vec4<f32>,
-    lightDir: vec3<f32>,
-    isSelected: u32,
-};
-
-@group(0) @binding(0) var<uniform> u: MeshUniforms;
-
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) frag_pos: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    let world_pos = u.model * vec4<f32>(in.position, 1.0);
-    out.frag_pos = world_pos.xyz;
-
-    let norm_mat = mat3x3<f32>(u.model[0].xyz, u.model[1].xyz, u.model[2].xyz);
-    out.normal = norm_mat * in.normal;
-    out.clip_position = u.proj * u.view * world_pos;
-    return out;
-}
-
-@vertex
-fn vs_outline(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    let world_pos = u.model * vec4<f32>(in.position * 1.06, 1.0);
-    out.frag_pos = world_pos.xyz;
-
-    let norm_mat = mat3x3<f32>(u.model[0].xyz, u.model[1].xyz, u.model[2].xyz);
-    out.normal = norm_mat * in.normal;
-    out.clip_position = u.proj * u.view * world_pos;
-    return out;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let norm = normalize(in.normal);
-    let light = normalize(u.lightDir);
-    let diff = max(dot(norm, light), 0.25);
-    var base_color = u.color.rgb * diff;
-    if (u.isSelected != 0u) {
-        return vec4<f32>(1.0, 0.72, 0.08, 1.0);
-    }
-    return vec4<f32>(base_color, u.color.a);
-}
-
-@fragment
-fn fs_outline(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 0.72, 0.08, 1.0);
-}
-";
-
-        // 2. Grid WGSL Shader Code
-        const string gridWgsl = @"
-struct GridUniforms {
-    view: mat4x4<f32>,
-    proj: mat4x4<f32>,
-    viewInv: mat4x4<f32>,
-    projInv: mat4x4<f32>,
-};
-
-@group(0) @binding(0) var<uniform> gu: GridUniforms;
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) near_point: vec3<f32>,
-    @location(1) far_point: vec3<f32>,
-};
-
-fn unprojectPoint(x: f32, y: f32, z: f32) -> vec3<f32> {
-    let p = gu.viewInv * gu.projInv * vec4<f32>(x, y, z, 1.0);
-    return p.xyz / p.w;
-}
-
-@vertex
-fn vs_main(@location(0) position: vec3<f32>) -> VertexOutput {
-    var out: VertexOutput;
-    out.clip_position = vec4<f32>(position.xy, 0.0, 1.0);
-    out.near_point = unprojectPoint(position.x, position.y, 0.0);
-    out.far_point = unprojectPoint(position.x, position.y, 1.0);
-    return out;
-}
-
-struct FragmentOutput {
-    @location(0) color: vec4<f32>,
-    @builtin(frag_depth) depth: f32,
-};
-
-@fragment
-fn fs_main(in: VertexOutput) -> FragmentOutput {
-    let t = -in.near_point.y / (in.far_point.y - in.near_point.y);
-    if (t < 0.0 || t > 1.0) {
-        discard;
-    }
-
-    let fragPos3D = in.near_point + t * (in.far_point - in.near_point);
-    let clipSpacePos = gu.proj * gu.view * vec4<f32>(fragPos3D, 1.0);
-    let realDepth = clipSpacePos.z / clipSpacePos.w;
-    // The grid lies exactly on the ground plane, so its depth can match an
-    // object's depth at the contact edge.  Nudge it forward by a fraction of
-    // a pixel to make the depth comparison deterministic and avoid z-fighting
-    // without making the grid ignore objects that are actually in front of it.
-    let depthBias = max(fwidth(realDepth) * 0.5, 0.000001);
-
-    let coord = fragPos3D.xz;
-    let derivative = fwidth(coord);
-    let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
-    let line = min(grid.x, grid.y);
-    // Keep the main axes visible as continuous one-pixel lines.  Using a
-    // tiny fraction of the pixel footprint here makes the axes hit only
-    // occasional fragments, which shows up as red/blue dots along the grid.
-    let minimumz = min(derivative.y, 1.0);
-    let minimumx = min(derivative.x, 1.0);
-    let onXAxis = abs(fragPos3D.x) <= minimumx;
-    let onZAxis = abs(fragPos3D.z) <= minimumz;
-    // The grid is transparent between its lines.  Discarding those pixels is
-    // important because the grid is rendered after the meshes and must not
-    // cover objects through an otherwise invisible fragment.
-    if (line > 1.0 && !onXAxis && !onZAxis) {
-        discard;
-    }
-
-    var gridColor = vec4<f32>(0.35, 0.35, 0.38, 1.0 - min(line, 1.0));
-
-    if (onXAxis) {
-        gridColor = vec4<f32>(0.2, 0.4, 0.9, 1.0);
-    }
-    if (onZAxis) {
-        gridColor = vec4<f32>(0.9, 0.2, 0.2, 1.0);
-    }
-
-    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / 50.0);
-
-    var out: FragmentOutput;
-    out.color = gridColor * fading;
-    out.depth = max(realDepth - depthBias, 0.0);
-    return out;
-}
-";
-
-        _meshShaderModule = CreateShaderModule(meshWgsl);
-        _gridShaderModule = CreateShaderModule(gridWgsl);
+        var meshShader = Shader.Load("Shaders/Mesh.wgsl");
+        var gridShader = Shader.Load("Shaders/Grid.wgsl");
+        _meshShaderModule = CreateShaderModule(meshShader);
+        _gridShaderModule = CreateShaderModule(gridShader);
 
         // BindGroupLayout for Mesh
         var meshLayoutEntry = new BindGroupLayoutEntry
@@ -707,8 +555,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             WriteMask = ColorWriteMask.All
         };
 
-        var fsEntryPoint = Marshal.StringToHGlobalAnsi("fs_main");
-        var vsEntryPoint = Marshal.StringToHGlobalAnsi("vs_main");
+        var fsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("fs_main").Name);
+        var vsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("vs_main").Name);
 
         var fragmentState = new FragmentState
         {
@@ -785,9 +633,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
 
         var outlineFragmentState = fragmentState;
-        var outlineFsEntryPoint = Marshal.StringToHGlobalAnsi("fs_outline");
+        var outlineFsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("fs_outline").Name);
         outlineFragmentState.EntryPoint = (byte*)outlineFsEntryPoint.ToPointer();
-        var outlineVsEntryPoint = Marshal.StringToHGlobalAnsi("vs_outline");
+        var outlineVsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("vs_outline").Name);
         var outlineVertexState = new VertexState
         {
             Module = _meshShaderModule,
@@ -869,10 +717,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             StencilBack = new StencilFaceState { Compare = CompareFunction.Always }
         };
 
+        var gridFsEntryPoint = Marshal.StringToHGlobalAnsi(gridShader.GetEntryPoint("fs_main").Name);
+        var gridVsEntryPoint = Marshal.StringToHGlobalAnsi(gridShader.GetEntryPoint("vs_main").Name);
+
         var gridFragmentState = new FragmentState
         {
             Module = _gridShaderModule,
-            EntryPoint = (byte*)fsEntryPoint.ToPointer(),
+            EntryPoint = (byte*)gridFsEntryPoint.ToPointer(),
             TargetCount = 1,
             Targets = &gridColorTarget
         };
@@ -883,7 +734,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             Vertex = new VertexState
             {
                 Module = _gridShaderModule,
-                EntryPoint = (byte*)vsEntryPoint.ToPointer(),
+                EntryPoint = (byte*)gridVsEntryPoint.ToPointer(),
                 BufferCount = 1,
                 Buffers = &gridBufferLayout
             },
@@ -901,9 +752,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         _gridPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in gridPipelineDesc);
     }
 
-    private ShaderModule* CreateShaderModule(string wgslCode)
+    private ShaderModule* CreateShaderModule(Shader shader)
     {
-        var codePtr = Marshal.StringToHGlobalAnsi(wgslCode);
+        var codePtr = Marshal.StringToHGlobalAnsi(shader.Source);
         var wgslDescriptor = new ShaderModuleWGSLDescriptor
         {
             Code = (byte*)codePtr.ToPointer()
