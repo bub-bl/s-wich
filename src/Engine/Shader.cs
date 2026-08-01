@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.RegularExpressions;
 
 namespace Crowbar.Engine;
@@ -11,21 +12,45 @@ public enum ShaderStageKind
 
 public sealed record ShaderEntryPoint(string Name, ShaderStageKind Stage);
 
+public readonly union ShaderParameter(float, Vector2, Vector3, Vector4, Matrix4x4, int, uint, bool)
+{
+    public string TypeName => this switch
+    {
+        float => "f32",
+        Vector2 => "vec2<f32>",
+        Vector3 => "vec3<f32>",
+        Vector4 => "vec4<f32>",
+        Matrix4x4 => "mat4x4<f32>",
+        int => "i32",
+        uint => "u32",
+        bool => "bool",
+        _ => throw new NotImplementedException()
+    };
+
+    public static ShaderParameterDefinition? TryParseParameter(string name, string type)
+    {
+        return type switch
+        {
+            "f32" => new ShaderParameterDefinition(name, typeof(float)),
+            "vec2<f32>" => new ShaderParameterDefinition(name, typeof(Vector2)),
+            "vec3<f32>" => new ShaderParameterDefinition(name, typeof(Vector3)),
+            "vec4<f32>" => new ShaderParameterDefinition(name, typeof(Vector4)),
+            "mat4x4<f32>" => new ShaderParameterDefinition(name, typeof(Matrix4x4)),
+            "i32" => new ShaderParameterDefinition(name, typeof(int)),
+            "u32" => new ShaderParameterDefinition(name, typeof(uint)),
+            "bool" => new ShaderParameterDefinition(name, typeof(bool)),
+            _ => null,
+        };
+    }
+}
+
+public sealed record ShaderParameterDefinition(string Name, Type Type);
+
 /// <summary>
 /// A shader source loaded from a file shipped with the application.
 /// </summary>
 public sealed partial class Shader
 {
-    private Shader(string requestedPath, string filePath, string source)
-    {
-        Path = requestedPath;
-        FilePath = filePath;
-        Source = source;
-        Name = System.IO.Path.GetFileNameWithoutExtension(filePath);
-        EntryPoints = DetectEntryPoints(source);
-        Parameters = DetectParameters(source);
-    }
-
     public string Path { get; }
 
     public string FilePath { get; }
@@ -36,7 +61,17 @@ public sealed partial class Shader
 
     public IReadOnlyList<ShaderEntryPoint> EntryPoints { get; }
 
-    public IReadOnlyList<ShaderParameter> Parameters { get; }
+    public IReadOnlyList<ShaderParameterDefinition> Parameters { get; }
+
+    private Shader(string requestedPath, string filePath, string source)
+    {
+        Path = requestedPath;
+        FilePath = filePath;
+        Source = source;
+        Name = System.IO.Path.GetFileNameWithoutExtension(filePath);
+        EntryPoints = DetectEntryPoints(source);
+        Parameters = DetectParameters(source);
+    }
 
     public ShaderEntryPoint GetEntryPoint(string name)
     {
@@ -81,33 +116,15 @@ public sealed partial class Shader
         ];
     }
 
-    private static IReadOnlyList<ShaderParameter> DetectParameters(string source)
+    private static IReadOnlyList<ShaderParameterDefinition> DetectParameters(string source)
     {
         var uniform = UniformPattern.Match(source);
         if (!uniform.Success) return [];
 
-        return FieldPattern.Matches(uniform.Groups["body"].Value)
-            .Select(match => TryParseParameter(match.Groups["name"].Value, match.Groups["type"].Value))
+        return [.. FieldPattern.Matches(uniform.Groups["body"].Value)
+            .Select(match => ShaderParameter.TryParseParameter(match.Groups["name"].Value, match.Groups["type"].Value))
             .Where(parameter => parameter != null)
-            .Select(parameter => parameter!)
-            .ToArray();
-    }
-
-    private static ShaderParameter? TryParseParameter(string name, string type)
-    {
-        return !Enum.TryParse(type switch
-        {
-            "f32" => nameof(ShaderParameterType.Float),
-            "vec2<f32>" => nameof(ShaderParameterType.Vector2),
-            "vec3<f32>" => nameof(ShaderParameterType.Vector3),
-            "vec4<f32>" => nameof(ShaderParameterType.Vector4),
-            "i32" => nameof(ShaderParameterType.Int),
-            "u32" => nameof(ShaderParameterType.UInt),
-            "bool" => nameof(ShaderParameterType.Bool),
-            _ => string.Empty
-        }, out ShaderParameterType parameterType)
-            ? null
-            : new ShaderParameter(name, parameterType);
+            .Select(parameter => parameter!)];
     }
 
     [GeneratedRegex(@"(?m)^\s*@(?<stage>vertex|fragment|compute)\s+fn\s+(?<name>[A-Za-z_]\w*)\s*\(",

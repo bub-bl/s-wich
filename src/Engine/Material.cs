@@ -2,31 +2,18 @@ using System.Numerics;
 
 namespace Crowbar.Engine;
 
-public enum ShaderParameterType
-{
-    Float,
-    Vector2,
-    Vector3,
-    Vector4,
-    Int,
-    UInt,
-    Bool
-}
-
-public sealed record ShaderParameter(string Name, ShaderParameterType Type);
-
 /// <summary>
 /// Values supplied to a shader for a renderable object.
 /// The renderer is responsible for packing these values into GPU resources.
 /// </summary>
 public sealed class Material
 {
-    private readonly Dictionary<string, object> _values = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ShaderParameter> _values = [with(StringComparer.Ordinal)];
 
     public string Name { get; }
     public Shader Shader { get; }
-    public IReadOnlyDictionary<string, object> Values => _values;
-    
+    public IReadOnlyDictionary<string, ShaderParameter> Values => _values;
+
     private Material(string name, Shader shader)
     {
         Name = string.IsNullOrWhiteSpace(name)
@@ -40,7 +27,7 @@ public sealed class Material
         ArgumentException.ThrowIfNullOrWhiteSpace(shaderName);
 
         var shaderPath = shaderName;
-        
+
         if (!Path.HasExtension(shaderPath))
         {
             shaderPath += ".wgsl";
@@ -52,24 +39,21 @@ public sealed class Material
         return new Material(shader.Name, shader);
     }
 
-    public Material Set<T>(string parameterName, T value)
+    public Material Set(string parameterName, ShaderParameter value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parameterName);
+
         var parameter = Shader.Parameters.FirstOrDefault(p => p.Name == parameterName)
                         ?? throw new ArgumentException(
                             $"Shader '{Shader.Name}' has no parameter named '{parameterName}'.", nameof(parameterName));
 
-        if (!IsCompatible(parameter.Type, value))
-            throw new ArgumentException(
-                $"Value for '{parameterName}' is not compatible with shader type '{parameter.Type}'.", nameof(value));
-
-        _values[parameterName] = value!;
+        _values[parameterName] = value;
         return this;
     }
 
     public bool TryGet<T>(string parameterName, out T value)
     {
-        if (_values.TryGetValue(parameterName, out var raw) && raw is T typed)
+        if (_values.TryGetValue(parameterName, out var raw) && TryGetValue(raw, out T typed))
         {
             value = typed;
             return true;
@@ -86,15 +70,15 @@ public sealed class Material
         .Set("color", new Vector4(0.2f, 0.6f, 1.0f, 1.0f))
         .Set("lightDir", Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.7f)));
 
-    private static bool IsCompatible(ShaderParameterType type, object? value) => type switch
+    private static bool TryGetValue<T>(ShaderParameter parameter, out T value)
     {
-        ShaderParameterType.Float => value is float,
-        ShaderParameterType.Vector2 => value is Vector2,
-        ShaderParameterType.Vector3 => value is Vector3,
-        ShaderParameterType.Vector4 => value is Vector4,
-        ShaderParameterType.Int => value is int,
-        ShaderParameterType.UInt => value is uint,
-        ShaderParameterType.Bool => value is bool,
-        _ => false
-    };
+        if (parameter.Value is T typed)
+        {
+            value = typed;
+            return true;
+        }
+
+        value = default!;
+        return false;
+    }
 }
