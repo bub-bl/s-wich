@@ -8,13 +8,49 @@
         Title="Silk.NET Sandbox Engine Editor - Avalonia 12"
         Width="1280" Height="800"
         WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="None"
         Background="#18181B"
         Foreground="#E4E4E7">
 
+    <Window.Styles>
+        <Style Selector="Button.titlebar-button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#D4D4D8"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.titlebar-button:pointerover">
+            <Setter Property="Background" Value="#3F3F46"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+        <Style Selector="Button.titlebar-button:pressed">
+            <Setter Property="Background" Value="#52525B"/>
+        </Style>
+        <Style Selector="Button.titlebar-close:pointerover">
+            <Setter Property="Background" Value="#C42B1C"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+        <Style Selector="Button.titlebar-close:pressed">
+            <Setter Property="Background" Value="#A52619"/>
+        </Style>
+    </Window.Styles>
+
     <Grid RowDefinitions="Auto, Auto, *, 160, Auto">
 
-        <!-- 1. Top MenuBar -->
-        <Menu Grid.Row="0" Background="#27272A" Height="28">
+        <!-- 1. Custom titlebar: menus share the same row as the window controls. -->
+        <Border Grid.Row="0" Background="#1F1F1F" BorderBrush="#3F3F46" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto, *, Auto" Height="32">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <Border Width="32" Height="32" Padding="11,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="◆" Foreground="#60A5FA" FontSize="10" VerticalAlignment="Center"/>
+            </Border>
+            <Menu Background="Transparent" Height="32" VerticalAlignment="Center">
             <MenuItem Header="_File">
                 <MenuItem Header="_New Scene" Click="OnNewSceneClick"/>
                 <Separator/>
@@ -34,7 +70,19 @@
             <MenuItem Header="_Help">
                 <MenuItem Header="About Engine"/>
             </MenuItem>
-        </Menu>
+            </Menu>
+        </StackPanel>
+                <Grid x:Name="TitleBarDragArea" Grid.Column="1" PointerPressed="OnTitleBarPointerPressed">
+                    <TextBlock Text="Silk.NET Sandbox Engine Editor" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               FontSize="12" Foreground="#D4D4D8" IsHitTestVisible="False"/>
+                </Grid>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Height="32">
+                    <Button Classes="titlebar-button" Content="&#xE921;" Click="OnMinimizeClick" Width="46" Height="32"/>
+                    <Button Classes="titlebar-button" Content="&#xE922;" x:Name="BtnMaximize" Click="OnMaximizeClick" Width="46" Height="32"/>
+                    <Button Classes="titlebar-button titlebar-close" Content="&#xE8BB;" Click="OnCloseClick" Width="46" Height="32"/>
+                </StackPanel>
+            </Grid>
+        </Border>
 
         <!-- 2. Main Toolbar -->
         <Border Grid.Row="1" Background="#202023" BorderBrush="#3F3F46" BorderThickness="0,1,0,1" Padding="8,4">
