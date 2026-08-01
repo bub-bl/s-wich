@@ -35,6 +35,8 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private RenderPipeline* _meshPipeline;
     private RenderPipeline* _wireframePipeline;
+    private RenderPipeline* _selectionDepthPipeline;
+    private RenderPipeline* _outlinePipeline;
     private RenderPipeline* _gridPipeline;
 
     private Buffer* _cubeVbo;
@@ -550,6 +552,18 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
+@vertex
+fn vs_outline(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    let world_pos = u.model * vec4<f32>(in.position * 1.06, 1.0);
+    out.frag_pos = world_pos.xyz;
+
+    let norm_mat = mat3x3<f32>(u.model[0].xyz, u.model[1].xyz, u.model[2].xyz);
+    out.normal = norm_mat * in.normal;
+    out.clip_position = u.proj * u.view * world_pos;
+    return out;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let norm = normalize(in.normal);
@@ -557,9 +571,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let diff = max(dot(norm, light), 0.25);
     var base_color = u.color.rgb * diff;
     if (u.isSelected != 0u) {
-        base_color += vec3<f32>(0.3, 0.3, 0.0);
+        return vec4<f32>(1.0, 0.72, 0.08, 1.0);
     }
     return vec4<f32>(base_color, u.color.a);
+}
+
+@fragment
+fn fs_outline(in: VertexOutput) -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.72, 0.08, 1.0);
 }
 ";
 
@@ -721,6 +740,21 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         _meshPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in meshPipelineDesc);
 
+        // This pass writes only the selected mesh's depth.  It is used just
+        // before the outline so the expanded back-face shell is hidden inside
+        // the selected object, while still being able to overlay other scene
+        // objects.
+        var selectionDepthStencilState = depthStencilState;
+        selectionDepthStencilState.DepthCompare = CompareFunction.Always;
+        var selectionDepthColorTarget = colorTarget;
+        selectionDepthColorTarget.WriteMask = ColorWriteMask.None;
+        var selectionDepthFragmentState = fragmentState;
+        selectionDepthFragmentState.Targets = &selectionDepthColorTarget;
+        var selectionDepthPipelineDesc = meshPipelineDesc;
+        selectionDepthPipelineDesc.DepthStencil = &selectionDepthStencilState;
+        selectionDepthPipelineDesc.Fragment = &selectionDepthFragmentState;
+        _selectionDepthPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in selectionDepthPipelineDesc);
+
         // WebGPU has no polygon-mode switch. Wireframe rendering therefore
         // uses the same shader and vertex layout with a line-list pipeline;
         // the dedicated index buffers contain the edges of each mesh face.
@@ -731,7 +765,38 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
             FrontFace = FrontFace.Ccw,
             CullMode = CullMode.None
         };
+        var outlineDepthStencilState = depthStencilState;
+        outlineDepthStencilState.DepthWriteEnabled = false;
+        // The selected object's depth mask is written immediately before this
+        // pass, so LessEqual keeps the outline on the silhouette instead of
+        // filling the object's faces with the outline color.
+        outlineDepthStencilState.DepthCompare = CompareFunction.LessEqual;
+        wireframePipelineDesc.DepthStencil = &outlineDepthStencilState;
         _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
+
+        var outlineFragmentState = fragmentState;
+        var outlineFsEntryPoint = Marshal.StringToHGlobalAnsi("fs_outline");
+        outlineFragmentState.EntryPoint = (byte*)outlineFsEntryPoint.ToPointer();
+        var outlineVsEntryPoint = Marshal.StringToHGlobalAnsi("vs_outline");
+        var outlineVertexState = new VertexState
+        {
+            Module = _meshShaderModule,
+            EntryPoint = (byte*)outlineVsEntryPoint.ToPointer(),
+            BufferCount = 1,
+            Buffers = &vertexBufferLayout
+        };
+        var outlinePipelineDesc = meshPipelineDesc;
+        outlinePipelineDesc.Vertex = outlineVertexState;
+        outlinePipelineDesc.Primitive = new PrimitiveState
+        {
+            Topology = PrimitiveTopology.TriangleList,
+            FrontFace = FrontFace.Ccw,
+            CullMode = CullMode.Front
+        };
+        outlinePipelineDesc.DepthStencil = &outlineDepthStencilState;
+        outlinePipelineDesc.Fragment = &outlineFragmentState;
+        _outlinePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in outlinePipelineDesc);
+
 
         // BindGroupLayout for Grid
         var gridLayoutEntry = new BindGroupLayoutEntry
@@ -956,6 +1021,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         {
             CleanupMeshResources();
 
+            // Keep the selected object's transform and GPU resources for a
+            // second pass.  Drawing the outline inside this loop lets a later
+            // object overwrite it (notably the green pyramid in the editor).
+            SceneObject? outlineObject = null;
+            Matrix4x4 outlineModel = default;
+            MeshGpuResources? outlineResources = null;
+
             foreach (var obj in Scene.Objects)
             {
                 if (!obj.IsVisible) continue;
@@ -980,12 +1052,19 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                     Proj = proj,
                     Color = new Vector4(obj.ColorR, obj.ColorG, obj.ColorB, obj.ColorA),
                     LightDir = lightDir,
-                    IsSelected = obj.IsSelected ? 1u : 0u
+                    IsSelected = wireframe && obj.IsSelected ? 1u : 0u
                 };
 
                 MeshGpuResources meshResources = GetMeshResources(obj);
                 WebGpuApi.Wgpu.QueueWriteBuffer(_queue, meshResources.UniformBuffer, 0, &uniforms, (nuint)sizeof(MeshUniforms));
                 WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, meshResources.BindGroup, 0, null);
+
+                if (obj.IsSelected && !wireframe)
+                {
+                    outlineObject = obj;
+                    outlineModel = model;
+                    outlineResources = meshResources;
+                }
 
                 if (obj.MeshType == "Pyramid")
                 {
@@ -1002,6 +1081,56 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                     uint indexCount = wireframe ? 48u : 36u;
                     WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint16, 0, (ulong)(indexCount * sizeof(ushort)));
                     WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
+                }
+
+            }
+
+            // Draw selection after every scene object so later meshes cannot
+            // cover the highlight.  The outline pipeline also uses an Always
+            // depth comparison because the highlight is intentionally an
+            // overlay rather than another occludable mesh.
+            if (outlineObject != null && outlineResources != null)
+            {
+                MeshUniforms outlineUniforms = new MeshUniforms
+                {
+                    Model = outlineModel,
+                    View = view,
+                    Proj = proj,
+                    Color = new Vector4(outlineObject.ColorR, outlineObject.ColorG, outlineObject.ColorB, outlineObject.ColorA),
+                    LightDir = lightDir,
+                    IsSelected = 0u
+                };
+                WebGpuApi.Wgpu.QueueWriteBuffer(_queue, outlineResources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
+
+                WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
+                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
+                if (outlineObject.MeshType == "Pyramid")
+                {
+                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
+                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
+                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+                }
+                else
+                {
+                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
+                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
+                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+                }
+
+                WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
+                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, outlineResources.BindGroup, 0, null);
+
+                if (outlineObject.MeshType == "Pyramid")
+                {
+                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
+                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
+                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+                }
+                else
+                {
+                    WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
+                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
+                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
                 }
             }
         }
@@ -1281,6 +1410,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         if (_meshPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_meshPipeline);
         if (_wireframePipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_wireframePipeline);
+        if (_selectionDepthPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_selectionDepthPipeline);
+        if (_outlinePipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_outlinePipeline);
         if (_gridPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_gridPipeline);
 
         if (_meshShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_meshShaderModule);
