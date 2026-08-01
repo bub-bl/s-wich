@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -13,7 +14,7 @@ using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 using Color = Silk.NET.WebGPU.Color;
 
-namespace MyApp;
+namespace Crowbar;
 
 public unsafe class SilkViewportControl : NativeControlHost
 {
@@ -41,14 +42,17 @@ public unsafe class SilkViewportControl : NativeControlHost
     private Buffer* _pyramidEbo;
     private Buffer* _gridVbo;
 
-    private Buffer* _meshUniformBuffer;
     private Buffer* _gridUniformBuffer;
 
-    private BindGroup* _meshBindGroup;
     private BindGroup* _gridBindGroup;
 
     private BindGroupLayout* _meshBindGroupLayout;
     private BindGroupLayout* _gridBindGroupLayout;
+
+    // QueueWriteBuffer is ordered on the queue. Reusing one uniform buffer for
+    // several draws therefore makes every draw observe the last object's data.
+    // Keep one buffer/bind group per object so each draw has stable uniforms.
+    private readonly Dictionary<SceneObject, MeshGpuResources> _meshResources = new();
 
     private int _width = 800;
     private int _height = 600;
@@ -295,6 +299,12 @@ public unsafe class SilkViewportControl : NativeControlHost
         public Matrix4x4 ProjInv;
     }
 
+    private sealed class MeshGpuResources
+    {
+        public Buffer* UniformBuffer;
+        public BindGroup* BindGroup;
+    }
+
     private void InitBuffers()
     {
         if (_device == null) return;
@@ -381,7 +391,6 @@ public unsafe class SilkViewportControl : NativeControlHost
         _gridVbo = CreateGpuBuffer(gridVertices, BufferUsage.Vertex);
 
         // 4. Uniform Buffers
-        _meshUniformBuffer = CreateEmptyBuffer((ulong)sizeof(MeshUniforms), BufferUsage.Uniform | BufferUsage.CopyDst);
         _gridUniformBuffer = CreateEmptyBuffer((ulong)sizeof(GridUniforms), BufferUsage.Uniform | BufferUsage.CopyDst);
     }
 
@@ -411,6 +420,72 @@ public unsafe class SilkViewportControl : NativeControlHost
             MappedAtCreation = false
         };
         return WebGpuApi.Wgpu.DeviceCreateBuffer(_device!, in desc);
+    }
+
+    private MeshGpuResources GetMeshResources(SceneObject obj)
+    {
+        if (_meshResources.TryGetValue(obj, out MeshGpuResources? resources))
+        {
+            return resources;
+        }
+
+        Buffer* uniformBuffer = CreateEmptyBuffer((ulong)sizeof(MeshUniforms), BufferUsage.Uniform | BufferUsage.CopyDst);
+        var bindGroupEntry = new BindGroupEntry
+        {
+            Binding = 0,
+            Buffer = uniformBuffer,
+            Size = (ulong)sizeof(MeshUniforms)
+        };
+        var bindGroupDesc = new BindGroupDescriptor
+        {
+            Layout = _meshBindGroupLayout,
+            EntryCount = 1,
+            Entries = &bindGroupEntry
+        };
+
+        resources = new MeshGpuResources
+        {
+            UniformBuffer = uniformBuffer,
+            BindGroup = WebGpuApi.Wgpu.DeviceCreateBindGroup(_device!, in bindGroupDesc)
+        };
+        _meshResources.Add(obj, resources);
+        return resources;
+    }
+
+    private void CleanupMeshResources()
+    {
+        if (Scene == null) return;
+
+        List<SceneObject>? removed = null;
+        foreach (SceneObject obj in _meshResources.Keys)
+        {
+            if (!Scene.Objects.Contains(obj))
+            {
+                (removed ??= new List<SceneObject>()).Add(obj);
+            }
+        }
+
+        if (removed == null) return;
+
+        foreach (SceneObject obj in removed)
+        {
+            ReleaseMeshResources(_meshResources[obj]);
+            _meshResources.Remove(obj);
+        }
+    }
+
+    private void ReleaseMeshResources(MeshGpuResources resources)
+    {
+        if (resources.BindGroup != null)
+        {
+            WebGpuApi.Wgpu.BindGroupRelease(resources.BindGroup);
+        }
+
+        if (resources.UniformBuffer != null)
+        {
+            WebGpuApi.Wgpu.BufferDestroy(resources.UniformBuffer);
+            WebGpuApi.Wgpu.BufferRelease(resources.UniformBuffer);
+        }
     }
 
     private void InitPipelines()
@@ -550,20 +625,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         };
         var meshLayoutDesc = new BindGroupLayoutDescriptor { EntryCount = 1, Entries = &meshLayoutEntry };
         _meshBindGroupLayout = WebGpuApi.Wgpu.DeviceCreateBindGroupLayout(_device, in meshLayoutDesc);
-
-        var meshBindGroupEntry = new BindGroupEntry
-        {
-            Binding = 0,
-            Buffer = _meshUniformBuffer,
-            Size = (ulong)sizeof(MeshUniforms)
-        };
-        var meshBindGroupDesc = new BindGroupDescriptor
-        {
-            Layout = _meshBindGroupLayout,
-            EntryCount = 1,
-            Entries = &meshBindGroupEntry
-        };
-        _meshBindGroup = WebGpuApi.Wgpu.DeviceCreateBindGroup(_device, in meshBindGroupDesc);
 
         // PipelineLayout for Mesh
         var meshLayoutLocal = _meshBindGroupLayout;
@@ -845,6 +906,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         if (Scene != null)
         {
+            CleanupMeshResources();
+
             foreach (var obj in Scene.Objects)
             {
                 if (!obj.IsVisible) continue;
@@ -872,8 +935,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                     IsSelected = obj.IsSelected ? 1u : 0u
                 };
 
-                WebGpuApi.Wgpu.QueueWriteBuffer(_queue, _meshUniformBuffer, 0, &uniforms, (nuint)sizeof(MeshUniforms));
-                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, _meshBindGroup, 0, null);
+                MeshGpuResources meshResources = GetMeshResources(obj);
+                WebGpuApi.Wgpu.QueueWriteBuffer(_queue, meshResources.UniformBuffer, 0, &uniforms, (nuint)sizeof(MeshUniforms));
+                WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, meshResources.BindGroup, 0, null);
 
                 if (obj.MeshType == "Pyramid")
                 {
@@ -1162,13 +1226,16 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         if (_meshShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_meshShaderModule);
         if (_gridShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_gridShaderModule);
 
-        if (_meshBindGroup != null) WebGpuApi.Wgpu.BindGroupRelease(_meshBindGroup);
         if (_gridBindGroup != null) WebGpuApi.Wgpu.BindGroupRelease(_gridBindGroup);
 
         if (_meshBindGroupLayout != null) WebGpuApi.Wgpu.BindGroupLayoutRelease(_meshBindGroupLayout);
         if (_gridBindGroupLayout != null) WebGpuApi.Wgpu.BindGroupLayoutRelease(_gridBindGroupLayout);
 
-        if (_meshUniformBuffer != null) { WebGpuApi.Wgpu.BufferDestroy(_meshUniformBuffer); WebGpuApi.Wgpu.BufferRelease(_meshUniformBuffer); }
+        foreach (MeshGpuResources resources in _meshResources.Values)
+        {
+            ReleaseMeshResources(resources);
+        }
+        _meshResources.Clear();
         if (_gridUniformBuffer != null) { WebGpuApi.Wgpu.BufferDestroy(_gridUniformBuffer); WebGpuApi.Wgpu.BufferRelease(_gridUniformBuffer); }
 
         if (_cubeVbo != null) { WebGpuApi.Wgpu.BufferDestroy(_cubeVbo); WebGpuApi.Wgpu.BufferRelease(_cubeVbo); }
