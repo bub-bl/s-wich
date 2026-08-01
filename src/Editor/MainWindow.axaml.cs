@@ -113,7 +113,7 @@ public partial class MainWindow : Window
                 Scene.Objects.Add(modelObject);
                 Log($"Loaded model: {modelPath}");
             }
-            catch (Exception exception) when (exception is IOException or FormatException)
+            catch (Exception exception) when (exception is IOException or FormatException or DllNotFoundException or EntryPointNotFoundException)
             {
                 Log($"Could not load model '{modelPath}': {exception.Message}");
             }
