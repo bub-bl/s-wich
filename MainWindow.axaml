@@ -38,15 +38,24 @@
 
         <!-- 2. Main Toolbar -->
         <Border Grid.Row="1" Background="#202023" BorderBrush="#3F3F46" BorderThickness="0,1,0,1" Padding="8,4">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="▶ Play" x:Name="BtnPlay" Click="OnTogglePlayClick" Background="#2563EB" Foreground="White" Padding="12,4" FontWeight="SemiBold"/>
-                <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Padding="8,4"/>
-                <Button Content="🎥 Reset Camera" Click="OnResetCameraClick" Padding="8,4"/>
-                <Separator Width="1" Height="20" Background="#3F3F46" Margin="4,0"/>
-                <Button Content="+ Add Cube" Click="OnAddCubeClick" Padding="8,4"/>
-                <Button Content="+ Add Pyramid" Click="OnAddPyramidClick" Padding="8,4"/>
-                <Button Content="🗑 Remove" Click="OnDeleteObjectClick" Padding="8,4"/>
-            </StackPanel>
+            <DockPanel LastChildFill="False">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
+                    <Button Content="▶ Play" x:Name="BtnPlay" Click="OnTogglePlayClick" Background="#2563EB" Foreground="White" Padding="12,4" FontWeight="SemiBold"/>
+                    <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Padding="8,4"/>
+                    <Button Content="🎥 Reset Camera" Click="OnResetCameraClick" Padding="8,4"/>
+                    <Separator Width="1" Height="20" Background="#3F3F46" Margin="4,0"/>
+                    <Button Content="+ Add Cube" Click="OnAddCubeClick" Padding="8,4"/>
+                    <Button Content="+ Add Pyramid" Click="OnAddPyramidClick" Padding="8,4"/>
+                    <Button Content="🗑 Remove" Click="OnDeleteObjectClick" Padding="8,4"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <TextBlock Text="{Binding #Viewport.Fps, StringFormat='FPS: {0}'}" FontSize="11" Foreground="#4ADE80" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding #Viewport.FrameTimeMs, StringFormat='{}{0:F1} ms'}" FontSize="11" Foreground="#A1A1AA"/>
+                    <Border Background="#27272A" Padding="6,2" CornerRadius="4">
+                        <TextBlock Text="WebGPU (WGPU)" FontSize="11" Foreground="#60A5FA" FontWeight="SemiBold"/>
+                    </Border>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- 3. Main Workspace (Hierarchy | Viewport | Inspector) -->

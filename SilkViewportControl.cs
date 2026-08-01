@@ -266,6 +266,8 @@ public unsafe class SilkViewportControl : NativeControlHost
     {
         public Matrix4x4 View;
         public Matrix4x4 Proj;
+        public Matrix4x4 ViewInv;
+        public Matrix4x4 ProjInv;
     }
 
     private void InitBuffers()
@@ -444,6 +446,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 struct GridUniforms {
     view: mat4x4<f32>,
     proj: mat4x4<f32>,
+    viewInv: mat4x4<f32>,
+    projInv: mat4x4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> gu: GridUniforms;
@@ -454,32 +458,58 @@ struct VertexOutput {
     @location(1) far_point: vec3<f32>,
 };
 
+fn unprojectPoint(x: f32, y: f32, z: f32) -> vec3<f32> {
+    let p = gu.viewInv * gu.projInv * vec4<f32>(x, y, z, 1.0);
+    return p.xyz / p.w;
+}
+
 @vertex
 fn vs_main(@location(0) position: vec3<f32>) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(position, 1.0);
-    out.near_point = vec3<f32>(position.x * 20.0, 0.0, position.y * 20.0);
-    out.far_point = vec3<f32>(position.x * 20.0, 0.0, position.y * 20.0);
+    out.clip_position = vec4<f32>(position.xy, 0.0, 1.0);
+    out.near_point = unprojectPoint(position.x, position.y, 0.0);
+    out.far_point = unprojectPoint(position.x, position.y, 1.0);
     return out;
 }
 
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+    @builtin(frag_depth) depth: f32,
+};
+
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let coord = in.near_point.xz;
-    let grid = abs(fract(coord - 0.5) - 0.5);
-    let line = min(grid.x, grid.y);
-    var color = vec4<f32>(0.35, 0.35, 0.38, 1.0 - min(line * 10.0, 1.0));
-    
-    if (abs(coord.x) < 0.1) {
-        color = vec4<f32>(0.2, 0.4, 0.9, 0.9); // Z axis
-    }
-    if (abs(coord.y) < 0.1) {
-        color = vec4<f32>(0.9, 0.2, 0.2, 0.9); // X axis
+fn fs_main(in: VertexOutput) -> FragmentOutput {
+    let t = -in.near_point.y / (in.far_point.y - in.near_point.y);
+    if (t < 0.0) {
+        discard;
     }
 
-    let dist = length(coord);
-    let fading = max(0.0, 1.0 - dist / 30.0);
-    return color * fading;
+    let fragPos3D = in.near_point + t * (in.far_point - in.near_point);
+    let clipSpacePos = gu.proj * gu.view * vec4<f32>(fragPos3D, 1.0);
+    let realDepth = clipSpacePos.z / clipSpacePos.w;
+
+    let coord = fragPos3D.xz;
+    let derivative = fwidth(coord);
+    let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
+    let line = min(grid.x, grid.y);
+    let minimumz = min(derivative.y, 1.0);
+    let minimumx = min(derivative.x, 1.0);
+
+    var gridColor = vec4<f32>(0.35, 0.35, 0.38, 1.0 - min(line, 1.0));
+
+    if (fragPos3D.x > -0.02 * minimumx && fragPos3D.x < 0.02 * minimumx) {
+        gridColor = vec4<f32>(0.2, 0.4, 0.9, 1.0);
+    }
+    if (fragPos3D.z > -0.02 * minimumz && fragPos3D.z < 0.02 * minimumz) {
+        gridColor = vec4<f32>(0.9, 0.2, 0.2, 1.0);
+    }
+
+    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / 50.0);
+
+    var out: FragmentOutput;
+    out.color = gridColor * fading;
+    out.depth = realDepth;
+    return out;
 }
 ";
 
@@ -727,6 +757,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         Matrix4x4 view = Matrix4x4.CreateLookAt(eye, target, Vector3.UnitY);
         Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 4f, (float)_width / _height, 0.1f, 100f);
 
+        Matrix4x4.Invert(view, out Matrix4x4 viewInv);
+        Matrix4x4.Invert(proj, out Matrix4x4 projInv);
+
         // 3. Acquire Surface Texture
         SurfaceTexture surfaceTexture;
         WebGpuApi.Wgpu.SurfaceGetCurrentTexture(_surface, &surfaceTexture);
@@ -761,7 +794,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         RenderPassEncoder* pass = WebGpuApi.Wgpu.CommandEncoderBeginRenderPass(encoder, in renderPassDesc);
 
         // A. Draw Infinite Grid
-        GridUniforms gridUniforms = new GridUniforms { View = view, Proj = proj };
+        GridUniforms gridUniforms = new GridUniforms
+        {
+            // System.Numerics uses row vectors. WGSL interprets the same
+            // memory as column-major matrices, which is exactly the
+            // transpose needed for `matrix * vector` in the shader.
+            View = view,
+            Proj = proj,
+            ViewInv = viewInv,
+            ProjInv = projInv
+        };
         WebGpuApi.Wgpu.QueueWriteBuffer(_queue, _gridUniformBuffer, 0, &gridUniforms, (nuint)sizeof(GridUniforms));
 
         WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _gridPipeline);
