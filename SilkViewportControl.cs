@@ -34,12 +34,15 @@ public unsafe class SilkViewportControl : NativeControlHost
     private ShaderModule* _gridShaderModule;
 
     private RenderPipeline* _meshPipeline;
+    private RenderPipeline* _wireframePipeline;
     private RenderPipeline* _gridPipeline;
 
     private Buffer* _cubeVbo;
     private Buffer* _cubeEbo;
+    private Buffer* _cubeWireframeEbo;
     private Buffer* _pyramidVbo;
     private Buffer* _pyramidEbo;
+    private Buffer* _pyramidWireframeEbo;
     private Buffer* _gridVbo;
 
     private Buffer* _gridUniformBuffer;
@@ -338,6 +341,16 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         _cubeVbo = CreateGpuBuffer(cubeVertices, BufferUsage.Vertex);
         _cubeEbo = CreateGpuBuffer(cubeIndices, BufferUsage.Index);
+        ushort[] cubeWireframeIndices = new ushort[]
+        {
+            0, 1, 1, 2, 2, 3, 3, 0,
+            4, 5, 5, 6, 6, 7, 7, 4,
+            8, 9, 9, 10, 10, 11, 11, 8,
+            12, 13, 13, 14, 14, 15, 15, 12,
+            16, 17, 17, 18, 18, 19, 19, 16,
+            20, 21, 21, 22, 22, 23, 23, 20
+        };
+        _cubeWireframeEbo = CreateGpuBuffer(cubeWireframeIndices, BufferUsage.Index);
 
         // 2. Pyramid Vertices
         float[] pyramidVertices = new float[]
@@ -376,6 +389,15 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         _pyramidVbo = CreateGpuBuffer(pyramidVertices, BufferUsage.Vertex);
         _pyramidEbo = CreateGpuBuffer(pyramidIndices, BufferUsage.Index);
+        ushort[] pyramidWireframeIndices = new ushort[]
+        {
+            0, 1, 1, 2, 2, 0,
+            3, 4, 4, 5, 5, 3,
+            6, 7, 7, 8, 8, 6,
+            9, 10, 10, 11, 11, 9,
+            12, 13, 13, 14, 14, 15, 15, 12
+        };
+        _pyramidWireframeEbo = CreateGpuBuffer(pyramidWireframeIndices, BufferUsage.Index);
 
         // 3. Grid Quad Vertices
         float[] gridVertices = new float[]
@@ -699,6 +721,18 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         _meshPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in meshPipelineDesc);
 
+        // WebGPU has no polygon-mode switch. Wireframe rendering therefore
+        // uses the same shader and vertex layout with a line-list pipeline;
+        // the dedicated index buffers contain the edges of each mesh face.
+        var wireframePipelineDesc = meshPipelineDesc;
+        wireframePipelineDesc.Primitive = new PrimitiveState
+        {
+            Topology = PrimitiveTopology.LineList,
+            FrontFace = FrontFace.Ccw,
+            CullMode = CullMode.None
+        };
+        _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
+
         // BindGroupLayout for Grid
         var gridLayoutEntry = new BindGroupLayoutEntry
         {
@@ -913,7 +947,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         WebGpuApi.Wgpu.QueueWriteBuffer(_queue, _gridUniformBuffer, 0, &gridUniforms, (nuint)sizeof(GridUniforms));
 
         // A. Draw Scene Objects
-        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _meshPipeline);
+        bool wireframe = Scene?.IsWireframe == true;
+        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, wireframe ? _wireframePipeline : _meshPipeline);
 
         Vector3 lightDir = Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.7f));
 
@@ -955,14 +990,18 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
                 if (obj.MeshType == "Pyramid")
                 {
                     WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+                    Buffer* indexBuffer = wireframe ? _pyramidWireframeEbo : _pyramidEbo;
+                    uint indexCount = wireframe ? 30u : 18u;
+                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint16, 0, (ulong)(indexCount * sizeof(ushort)));
+                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
                 }
                 else
                 {
                     WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
-                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+                    Buffer* indexBuffer = wireframe ? _cubeWireframeEbo : _cubeEbo;
+                    uint indexCount = wireframe ? 48u : 36u;
+                    WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint16, 0, (ulong)(indexCount * sizeof(ushort)));
+                    WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
                 }
             }
         }
@@ -1241,6 +1280,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         if (_depthTexture != null) { WebGpuApi.Wgpu.TextureDestroy(_depthTexture); WebGpuApi.Wgpu.TextureRelease(_depthTexture); }
 
         if (_meshPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_meshPipeline);
+        if (_wireframePipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_wireframePipeline);
         if (_gridPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_gridPipeline);
 
         if (_meshShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_meshShaderModule);
@@ -1260,8 +1300,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         if (_cubeVbo != null) { WebGpuApi.Wgpu.BufferDestroy(_cubeVbo); WebGpuApi.Wgpu.BufferRelease(_cubeVbo); }
         if (_cubeEbo != null) { WebGpuApi.Wgpu.BufferDestroy(_cubeEbo); WebGpuApi.Wgpu.BufferRelease(_cubeEbo); }
+        if (_cubeWireframeEbo != null) { WebGpuApi.Wgpu.BufferDestroy(_cubeWireframeEbo); WebGpuApi.Wgpu.BufferRelease(_cubeWireframeEbo); }
         if (_pyramidVbo != null) { WebGpuApi.Wgpu.BufferDestroy(_pyramidVbo); WebGpuApi.Wgpu.BufferRelease(_pyramidVbo); }
         if (_pyramidEbo != null) { WebGpuApi.Wgpu.BufferDestroy(_pyramidEbo); WebGpuApi.Wgpu.BufferRelease(_pyramidEbo); }
+        if (_pyramidWireframeEbo != null) { WebGpuApi.Wgpu.BufferDestroy(_pyramidWireframeEbo); WebGpuApi.Wgpu.BufferRelease(_pyramidWireframeEbo); }
         if (_gridVbo != null) { WebGpuApi.Wgpu.BufferDestroy(_gridVbo); WebGpuApi.Wgpu.BufferRelease(_gridVbo); }
 
         if (_surface != null) WebGpuApi.Wgpu.SurfaceRelease(_surface);
