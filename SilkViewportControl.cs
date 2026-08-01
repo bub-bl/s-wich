@@ -997,7 +997,16 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         if (forwardInput == 0f && strafeInput == 0f) return;
 
         float yawRad = MathF.PI / 180f * Scene.CameraYaw;
-        Vector3 forward = new(-MathF.Sin(yawRad), 0f, -MathF.Cos(yawRad));
+        float pitchRad = MathF.PI / 180f * Scene.CameraPitch;
+        float distance = MathF.Max(Scene.CameraDistance, 0.001f);
+        Vector3 cameraOffset = new(
+            distance * MathF.Cos(pitchRad) * MathF.Sin(yawRad),
+            distance * MathF.Sin(pitchRad),
+            distance * MathF.Cos(pitchRad) * MathF.Cos(yawRad));
+
+        // The camera looks from eye (target + offset) toward target. Move
+        // along that exact view vector, including its vertical component.
+        Vector3 forward = Vector3.Normalize(-cameraOffset);
         Vector3 right = new(MathF.Cos(yawRad), 0f, -MathF.Sin(yawRad));
         Vector3 direction = forward * forwardInput + right * strafeInput;
 
@@ -1009,6 +1018,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
         Vector3 offset = direction * CameraMoveSpeed * deltaTime;
         Scene.CameraTargetX += offset.X;
+        Scene.CameraTargetY += offset.Y;
         Scene.CameraTargetZ += offset.Z;
     }
 
