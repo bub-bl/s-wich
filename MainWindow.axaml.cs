@@ -191,6 +191,24 @@ public partial class MainWindow : Window
         SetAssetsDrawerOpen(false);
     }
 
+    private void OnConsoleTabClick(object? sender, RoutedEventArgs e)
+    {
+        SetDrawerTab(showAssets: false);
+    }
+
+    private void OnAssetsTabClick(object? sender, RoutedEventArgs e)
+    {
+        SetDrawerTab(showAssets: true);
+    }
+
+    private void SetDrawerTab(bool showAssets)
+    {
+        BtnConsoleTab.IsChecked = !showAssets;
+        BtnAssetsTab.IsChecked = showAssets;
+        ConsoleTabContent.IsVisible = !showAssets;
+        AssetsTabContent.IsVisible = showAssets;
+    }
+
     private void ToggleAssetsDrawer()
     {
         SetAssetsDrawerOpen(!_isAssetsDrawerOpen);

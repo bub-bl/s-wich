@@ -38,6 +38,22 @@
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="BackgroundSizing" Value="InnerBorderEdge"/>
         </Style>
+        <Style Selector="ToggleButton.drawer-tab">
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#A1A1AA"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="10,3"/>
+        </Style>
+        <Style Selector="ToggleButton.drawer-tab:pointerover">
+            <Setter Property="Background" Value="#3F3F46"/>
+            <Setter Property="Foreground" Value="#F4F4F5"/>
+        </Style>
+        <Style Selector="ToggleButton.drawer-tab:checked">
+            <Setter Property="Background" Value="#3F3F46"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="Auto, Auto, *, 0, Auto">
@@ -180,43 +196,48 @@
                 <Grid RowDefinitions="Auto, *">
                     <Border Grid.Row="0" Background="#27272A" BorderBrush="#3F3F46" BorderThickness="0,0,0,1"
                             Padding="12,8" CornerRadius="8,8,0,0">
-                        <Grid ColumnDefinitions="Auto, *, Auto">
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="◆" Foreground="#60A5FA" VerticalAlignment="Center"/>
-                                <TextBlock Text="Console / Project Assets" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock Grid.Column="1" Text="Space to toggle drawer" Foreground="#71717A"
-                                       FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                            <Button Grid.Column="2" Content="×" Click="OnCloseAssetsDrawerClick"
-                                    ToolTip.Tip="Close Project Assets (Space / Escape)" Padding="8,2"
-                                    Background="Transparent" Foreground="#A1A1AA"/>
-                        </Grid>
+                    <Grid ColumnDefinitions="Auto, Auto, Auto, *, Auto">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="◆" Foreground="#60A5FA" VerticalAlignment="Center"/>
+                            <TextBlock Text="Console / Project Assets" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" Width="1" Height="18" Background="#52525B" Margin="12,0"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <ToggleButton x:Name="BtnConsoleTab" Classes="drawer-tab" Content="Console"
+                                          IsChecked="False" Click="OnConsoleTabClick"/>
+                            <ToggleButton x:Name="BtnAssetsTab" Classes="drawer-tab" Content="Project Assets"
+                                          IsChecked="True" Click="OnAssetsTabClick"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="3" Text="Space to toggle drawer" Foreground="#71717A"
+                                   FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        <Button Grid.Column="4" Content="×" Click="OnCloseAssetsDrawerClick"
+                                ToolTip.Tip="Close Project Assets (Space / Escape)" Padding="8,2"
+                                Background="Transparent" Foreground="#A1A1AA"/>
+                    </Grid>
+                </Border>
+                <Grid Grid.Row="1">
+                    <Border x:Name="ConsoleTabContent" Padding="4" Background="#121214" Margin="4" CornerRadius="4"
+                            IsVisible="False">
+                        <TextBox x:Name="TxtConsole" IsReadOnly="True" AcceptsReturn="True"
+                                 Background="#121214" Foreground="#A1A1AA" FontFamily="Consolas, Courier New"/>
                     </Border>
-                    <TabControl Grid.Row="1" SelectedIndex="1" Padding="0">
-                        <TabItem Header="Console">
-                            <TextBox x:Name="TxtConsole" IsReadOnly="True" AcceptsReturn="True"
-                                     Background="#121214" Foreground="#A1A1AA" FontFamily="Consolas, Courier New"
-                                     Margin="4" CornerRadius="4"/>
-                        </TabItem>
-                        <TabItem Header="Project Assets">
-                            <Border Padding="12" Background="#121214" Margin="4" CornerRadius="4">
-                                <WrapPanel Orientation="Horizontal">
-                                    <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
-                                        <TextBlock Text="📁" FontSize="32" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Shaders" FontSize="11" HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                    <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
-                                        <TextBlock Text="📁" FontSize="32" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Textures" FontSize="11" HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                    <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
-                                        <TextBlock Text="🧊" FontSize="32" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Cube.obj" FontSize="11" HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                </WrapPanel>
-                            </Border>
-                        </TabItem>
-                    </TabControl>
+                    <Border x:Name="AssetsTabContent" Padding="12" Background="#121214" Margin="4" CornerRadius="4">
+                        <WrapPanel Orientation="Horizontal">
+                            <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
+                                <TextBlock Text="📁" FontSize="32" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Shaders" FontSize="11" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
+                                <TextBlock Text="📁" FontSize="32" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Textures" FontSize="11" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
+                                <TextBlock Text="🧊" FontSize="32" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Cube.obj" FontSize="11" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </WrapPanel>
+                    </Border>
+                </Grid>
                 </Grid>
             </Border>
         </Popup>
