@@ -94,8 +94,10 @@ public partial class HierarchyPanel : UserControl
         renderNode.Children.Add(new HierarchyNode("Main Camera", "◈", "Camera"));
         renderNode.Children.Add(new HierarchyNode("Sky", "☼", "Environment"));
 
-        foreach (var sceneObject in Scene.GameObjects)
+        foreach (GameObject gameObject in Scene.GameObjects)
         {
+            SceneObject? sceneObject = gameObject.ModelRenderer?.SceneObject;
+            if (sceneObject == null) continue;
             var icon = sceneObject.MeshType == "Pyramid" ? "◆" : "■";
             var objectNode = new HierarchyNode(sceneObject.Name, icon, sceneObject.MeshType, sceneObject);
             sceneObject.PropertyChanged += (_, _) => objectNode.Refresh();

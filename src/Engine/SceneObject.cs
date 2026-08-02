@@ -5,6 +5,9 @@ namespace Crowbar.Engine;
 
 public class SceneObject : INotifyPropertyChanged
 {
+    internal Renderer? OwnerRenderer { get; set; }
+    public Renderer? Renderer => OwnerRenderer;
+
     public bool RenderingEnabled { get; set; } = true;
     public Transform Transform { get; set; } = new();
     

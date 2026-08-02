@@ -65,6 +65,8 @@ public sealed class MeshRenderPass
         }
     }
 
+    internal static Model? GetModel(SceneObject obj) => (obj.Renderer as ModelRenderer)?.Model;
+
     private bool ShouldRender(SceneObject obj, MeshRenderContext context) => _mode switch
     {
         MeshRenderPassMode.Opaque => context.GetColor(obj).W >= 1.0f,
@@ -82,7 +84,8 @@ public sealed class MeshRenderPass
                           * Matrix4x4.CreateTranslation(obj.PositionX, obj.PositionY, obj.PositionZ);
 
         Vector4 color = context.GetColor(obj);
-        if (obj.Model?.Materials.FirstOrDefault() is { } modelMaterial)
+        Model? modelAsset = (obj.Renderer as ModelRenderer)?.Model;
+        if (modelAsset?.Materials.FirstOrDefault() is { } modelMaterial)
         {
             Vector3 tinted = new Vector3(color.X, color.Y, color.Z)
                 * new Vector3(modelMaterial.BaseColorFactor.X, modelMaterial.BaseColorFactor.Y, modelMaterial.BaseColorFactor.Z);
@@ -97,7 +100,7 @@ public sealed class MeshRenderPass
             Color = color,
             LightDir = context.GetLightDirection(obj, context.LightDirection),
             IsSelected = context.Wireframe && obj.IsSelected ? 1u : 0u,
-            MaterialParams = obj.Model?.Materials.FirstOrDefault() is { } material
+            MaterialParams = modelAsset?.Materials.FirstOrDefault() is { } material
                 ? new Vector4(material.MetallicFactor, material.RoughnessFactor, 1.0f, 0.0f)
                 : new Vector4(1.0f, 1.0f, 1.0f, 0.0f),
             CameraPosition = new Vector4(context.CameraPosition, 1.0f)
@@ -117,7 +120,7 @@ public sealed class MeshRenderPass
             };
         }
 
-        if (obj.Model != null && resources.ModelMeshes.Count > 0)
+        if (modelAsset != null && resources.ModelMeshes.Count > 0)
         {
             if (!context.Wireframe && _modelPipeline != null)
                 context.Pass.SetPipeline(_modelPipeline.Value);

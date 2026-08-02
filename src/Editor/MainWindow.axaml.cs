@@ -86,19 +86,19 @@ public partial class MainWindow : Window
             MeshType = "Pyramid"
         };
 
-        Scene.GameObjects.Add(cube1);
-        Scene.GameObjects.Add(cube2);
-        Scene.GameObjects.Add(pyramid);
+        Register(cube1);
+        Register(cube2);
+        Register(pyramid);
 
         const string modelPath = "Assets/scene.gltf";
         if (File.Exists(modelPath) || File.Exists(Path.Combine(AppContext.BaseDirectory, modelPath)))
         {
             try
             {
+                Model model = Model.Load(modelPath);
                 var modelObject = new SceneObject
                 {
                     Name = "Industrial Work Light",
-                    Model = Model.Load(modelPath),
                     PositionX = 0f,
                     PositionY = 0.5f,
                     PositionZ = -2f,
@@ -110,7 +110,7 @@ public partial class MainWindow : Window
                     ColorB = 0.35f,
                     MeshType = "Model"
                 };
-                Scene.GameObjects.Add(modelObject);
+                Register(modelObject, model);
                 Log($"Loaded model: {modelPath}");
             }
             catch (Exception exception) when (exception is IOException or FormatException or DllNotFoundException or EntryPointNotFoundException)
@@ -136,7 +136,7 @@ public partial class MainWindow : Window
             ColorB = (float)Random.Shared.NextDouble(),
             MeshType = "Cube"
         };
-        Scene.GameObjects.Add(obj);
+        Register(obj);
         Scene.SelectedObject = obj;
         Log($"Created new Scene Object: '{obj.Name}'");
     }
@@ -155,7 +155,7 @@ public partial class MainWindow : Window
             ColorB = (float)Random.Shared.NextDouble(),
             MeshType = "Pyramid"
         };
-        Scene.GameObjects.Add(obj);
+        Register(obj);
         Scene.SelectedObject = obj;
         Log($"Created new Scene Object: '{obj.Name}'");
     }
@@ -165,8 +165,14 @@ public partial class MainWindow : Window
         if (Scene.SelectedObject != null)
         {
             string name = Scene.SelectedObject.Name;
-            Scene.GameObjects.Remove(Scene.SelectedObject);
-            Scene.SelectedObject = Scene.GameObjects.Count > 0 ? Scene.GameObjects[0] : null;
+            GameObject? gameObject = Scene.GameObjects.FirstOrDefault(item =>
+                ReferenceEquals(item.GetComponent<ModelRenderer>()?.SceneObject, Scene.SelectedObject));
+            if (gameObject != null)
+                gameObject.Destroy();
+
+            Scene.SelectedObject = Scene.GameObjects.Count > 0
+                ? Scene.GameObjects[0].GetComponent<ModelRenderer>()?.SceneObject
+                : null;
             Log($"Removed Scene Object: '{name}'");
         }
     }
@@ -193,6 +199,13 @@ public partial class MainWindow : Window
         Scene.GameObjects.Clear();
         InitDefaultScene();
         Log("New scene loaded.");
+    }
+
+    private void Register(SceneObject sceneObject, Model? model = null)
+    {
+        var gameObject = new GameObject();
+        gameObject.AddComponent(new ModelRenderer(sceneObject) { Model = model });
+        Scene.AddGameObject(gameObject);
     }
 
     private void OnExitClick(object? sender, RoutedEventArgs e)
