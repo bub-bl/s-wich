@@ -32,13 +32,13 @@ public readonly union ShaderParameter(float, Vector2, Vector3, Vector4, Matrix4x
         return type switch
         {
             "f32" => new ShaderParameterDefinition(name, typeof(float)),
+            "i32" => new ShaderParameterDefinition(name, typeof(int)),
+            "u32" => new ShaderParameterDefinition(name, typeof(uint)),
+            "bool" => new ShaderParameterDefinition(name, typeof(bool)),
             "vec2<f32>" or "vec2f" => new ShaderParameterDefinition(name, typeof(Vector2)),
             "vec3<f32>" or "vec3f" => new ShaderParameterDefinition(name, typeof(Vector3)),
             "vec4<f32>" or "vec4f" => new ShaderParameterDefinition(name, typeof(Vector4)),
             "mat4x4<f32>" or "mat4f" => new ShaderParameterDefinition(name, typeof(Matrix4x4)),
-            "i32" => new ShaderParameterDefinition(name, typeof(int)),
-            "u32" => new ShaderParameterDefinition(name, typeof(uint)),
-            "bool" => new ShaderParameterDefinition(name, typeof(bool)),
             _ => null,
         };
     }
