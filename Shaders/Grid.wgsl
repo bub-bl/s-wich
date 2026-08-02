@@ -3,6 +3,10 @@ struct GridUniforms {
     proj: mat4x4<f32>,
     viewInv: mat4x4<f32>,
     projInv: mat4x4<f32>,
+    settings: vec4<f32>,
+    lineColor: vec4<f32>,
+    xAxisColor: vec4<f32>,
+    zAxisColor: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> gu: GridUniforms;
@@ -40,6 +44,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     }
 
     let fragPos3D = in.near_point + t * (in.far_point - in.near_point);
+    let halfSize = gu.settings.x * 0.5;
+    if (abs(fragPos3D.x) > halfSize || abs(fragPos3D.z) > halfSize) {
+        discard;
+    }
     let clipSpacePos = gu.proj * gu.view * vec4<f32>(fragPos3D, 1.0);
     let realDepth = clipSpacePos.z / clipSpacePos.w;
     // The grid lies exactly on the ground plane, so its depth can match an
@@ -48,7 +56,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     // without making the grid ignore objects that are actually in front of it.
     let depthBias = max(fwidth(realDepth) * 0.5, 0.000001);
 
-    let coord = fragPos3D.xz;
+    let coord = fragPos3D.xz / gu.settings.y;
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let line = min(grid.x, grid.y);
@@ -66,16 +74,16 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         discard;
     }
 
-    var gridColor = vec4<f32>(0.35, 0.35, 0.38, 1.0 - min(line, 1.0));
+    var gridColor = gu.lineColor * vec4<f32>(1.0, 1.0, 1.0, 1.0 - min(line, 1.0));
 
-    if (onXAxis) {
-        gridColor = vec4<f32>(0.2, 0.4, 0.9, 1.0);
+    if (onXAxis && gu.settings.w > 0.5) {
+        gridColor = gu.xAxisColor;
     }
-    if (onZAxis) {
-        gridColor = vec4<f32>(0.9, 0.2, 0.2, 1.0);
+    if (onZAxis && gu.settings.w > 0.5) {
+        gridColor = gu.zAxisColor;
     }
 
-    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / 50.0);
+    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / gu.settings.z);
 
     var out: FragmentOutput;
     out.color = gridColor * fading;

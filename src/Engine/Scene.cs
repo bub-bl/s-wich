@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using Crowbar.Engine.Rendering;
 
 namespace Crowbar.Engine;
 

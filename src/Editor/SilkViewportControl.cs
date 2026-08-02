@@ -9,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Crowbar.Engine;
 using Crowbar.Engine.Rendering;
+using GridApi = Crowbar.Engine.Rendering.Grid;
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 using Color = Silk.NET.WebGPU.Color;
@@ -71,6 +72,7 @@ public unsafe class SilkViewportControl : NativeControlHost
     // several draws therefore makes every draw observe the last object's data.
     // Keep one buffer/bind group per object so each draw has stable uniforms.
     private readonly Dictionary<SceneObject, MeshGpuResources> _meshResources = new();
+    public GridApi Grid { get; } = new();
 
     private int _width = 800;
     private int _height = 600;
@@ -297,15 +299,6 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         _depthTexture = WebGpuApi.Wgpu.DeviceCreateTexture(_device, in depthTextureDesc);
         _depthTextureView = WebGpuApi.Wgpu.TextureCreateView(_depthTexture, null);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct GridUniforms
-    {
-        public Matrix4x4 View;
-        public Matrix4x4 Proj;
-        public Matrix4x4 ViewInv;
-        public Matrix4x4 ProjInv;
     }
 
     private void InitBuffers()
@@ -1108,16 +1101,10 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         // Prepare the grid uniforms. The grid itself is drawn after the scene
         // so mesh depth is already available to its depth test.
-        GridUniforms gridUniforms = new GridUniforms
-        {
-            // System.Numerics uses row vectors. WGSL interprets the same
-            // memory as column-major matrices, which is exactly the
-            // transpose needed for `matrix * vector` in the shader.
-            View = view,
-            Proj = proj,
-            ViewInv = viewInv,
-            ProjInv = projInv
-        };
+        // System.Numerics uses row vectors. WGSL interprets the same memory
+        // as column-major matrices, which is exactly the transpose needed for
+        // `matrix * vector` in the shader.
+        GridUniforms gridUniforms = Grid.CreateUniforms(view, proj, viewInv, projInv);
         WebGpuApi.WriteBuffer(WebGpuQueue.FromNative((nint)_queue),
             WebGpuBuffer.FromNative((nint)_gridUniformBuffer), in gridUniforms);
 
