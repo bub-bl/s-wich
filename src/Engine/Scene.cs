@@ -25,7 +25,7 @@ public class Scene : IValid, INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     
     public SceneFileMetadata? Metadata { get; internal init; }
-    public ObservableCollection<GameObject> GameObjects { get; } = [];
+    public ObservableCollection<SceneObject> GameObjects { get; } = [];
     public bool IsValid => Current == this;
     
     public static Scene? Current { get; private set; }
@@ -144,12 +144,13 @@ public class Scene : IValid, INotifyPropertyChanged
     
     internal void AddGameObject(GameObject gameObject)
     {
-        GameObjects.Add(gameObject);
+        // GameObjects.Add(gameObject);
     }
 
     internal bool RemoveGameObject(GameObject gameObject)
     {
-        return GameObjects.Remove(gameObject);
+        // return GameObjects.Remove(gameObject);
+        return false;
     }
 
     public void ResetCamera()
