@@ -91,7 +91,10 @@ public unsafe class SilkViewportControl : NativeControlHost
     private double _lastFrameTime;
     private int _frameCount;
     private double _fpsTimer;
-    private DispatcherTimer? _timer;
+    private Thread? _renderThread;
+    private CancellationTokenSource? _renderCancellation;
+    private Scene? _renderScene;
+    private readonly object _gpuLock = new();
 
     public static readonly StyledProperty<Scene?> SceneProperty =
         AvaloniaProperty.Register<SilkViewportControl, Scene?>(nameof(Scene));
@@ -146,6 +149,19 @@ public unsafe class SilkViewportControl : NativeControlHost
     {
         get => GetValue(GpuRendererProperty);
         private set => SetValue(GpuRendererProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property == SceneProperty)
+        {
+            lock (_gpuLock)
+            {
+                _renderScene = change.NewValue as Scene;
+            }
+        }
     }
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
@@ -209,17 +225,21 @@ public unsafe class SilkViewportControl : NativeControlHost
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
-        _width = Math.Max(1, (int)e.NewSize.Width);
-        _height = Math.Max(1, (int)e.NewSize.Height);
+        int width = Math.Max(1, (int)e.NewSize.Width);
+        int height = Math.Max(1, (int)e.NewSize.Height);
 
         if (_hwnd != nint.Zero && OperatingSystem.IsWindows())
         {
-            SetWindowPos(_hwnd, nint.Zero, 0, 0, _width, _height, 0x0004 /* SWP_NOZORDER */ | 0x0002 /* SWP_NOMOVE */);
+            SetWindowPos(_hwnd, nint.Zero, 0, 0, width, height, 0x0004 /* SWP_NOZORDER */ | 0x0002 /* SWP_NOMOVE */);
         }
 
-        if (_surface != null && _device != null)
+        lock (_gpuLock)
         {
-            ReconfigureSurface();
+            _width = width;
+            _height = height;
+
+            if (_surface != null && _device != null)
+                ReconfigureSurface();
         }
     }
 
@@ -599,12 +619,13 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void CleanupMeshResources()
     {
-        if (Scene == null) return;
+        Scene? scene = _renderScene;
+        if (scene == null) return;
 
         List<SceneObject>? removed = null;
         foreach (SceneObject obj in _meshResources.Keys)
         {
-            if (obj.Renderer?.GameObject is not { } gameObject || !Scene.GameObjects.Contains(gameObject))
+            if (obj.Renderer?.GameObject is not { } gameObject || !scene.GameObjects.Contains(gameObject))
             {
                 (removed ??= new List<SceneObject>()).Add(obj);
             }
@@ -1021,26 +1042,50 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void StartRenderingLoop()
     {
-        _timer?.Stop();
-        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1), DispatcherPriority.Input, OnTimerTick);
-        _timer.Start();
+        StopRenderingLoop();
+        _renderScene = Scene;
+
+        _renderCancellation = new CancellationTokenSource();
+        CancellationToken cancellationToken = _renderCancellation.Token;
+        _renderThread = new Thread(() =>
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                lock (_gpuLock)
+                {
+                    if (_surface != null && _device != null)
+                        RenderFrame();
+                }
+
+                Thread.Yield();
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "Crowbar Viewport Render"
+        };
+        _renderThread.Start();
     }
 
     private void StopRenderingLoop()
     {
-        _timer?.Stop();
-        _timer = null;
-    }
+        CancellationTokenSource? cancellation = _renderCancellation;
+        _renderCancellation = null;
+        cancellation?.Cancel();
 
-    private void OnTimerTick(object? sender, EventArgs e)
-    {
-        if (_surface == null || _device == null) return;
-        RenderFrame();
+        Thread? renderThread = _renderThread;
+        _renderThread = null;
+        if (renderThread != null && renderThread != Thread.CurrentThread)
+            renderThread.Join();
+
+        cancellation?.Dispose();
+        _renderScene = null;
     }
 
     private void RenderFrame()
     {
         if (_surface == null || _device == null || _depthTextureView == null) return;
+        Scene? scene = _renderScene;
 
         // 1. Timing & FPS
         double currentTime = _stopwatch.Elapsed.TotalSeconds;
@@ -1048,26 +1093,32 @@ public unsafe class SilkViewportControl : NativeControlHost
         _lastFrameTime = currentTime;
 
         UpdateKeyboardMovement((float)Math.Clamp(deltaTime, 0.0, 0.1));
-        Scene?.UpdateCameraPositionSmoothing((float)deltaTime);
-        Scene?.Update((float)deltaTime);
+        scene?.UpdateCameraPositionSmoothing((float)deltaTime);
+        scene?.Update((float)deltaTime);
 
         _frameCount++;
         _fpsTimer += deltaTime;
         if (_fpsTimer >= 0.5)
         {
-            Fps = (int)(_frameCount / _fpsTimer);
-            FrameTimeMs = (float)((_fpsTimer / _frameCount) * 1000.0);
+            int fps = (int)(_frameCount / _fpsTimer);
+            float frameTimeMs = (float)((_fpsTimer / _frameCount) * 1000.0);
             _frameCount = 0;
             _fpsTimer = 0;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                Fps = fps;
+                FrameTimeMs = frameTimeMs;
+            });
         }
 
         // 2. Matrices & Camera Setup
-        float yawRad = MathF.PI / 180f * (Scene?.CameraYaw ?? 45f);
-        float pitchRad = MathF.PI / 180f * (Scene?.CameraPitch ?? 30f);
+        float yawRad = MathF.PI / 180f * (scene?.CameraYaw ?? 45f);
+        float pitchRad = MathF.PI / 180f * (scene?.CameraPitch ?? 30f);
         Vector3 eye = new(
-            Scene?.CameraPositionX ?? 4.242641f,
-            Scene?.CameraPositionY ?? 3.0f,
-            Scene?.CameraPositionZ ?? 4.242641f);
+            scene?.CameraPositionX ?? 4.242641f,
+            scene?.CameraPositionY ?? 3.0f,
+            scene?.CameraPositionZ ?? 4.242641f);
         Vector3 forward = GetCameraForward(yawRad, pitchRad);
 
         Matrix4x4 view = Matrix4x4.CreateLookAt(eye, eye + forward, Vector3.UnitY);
@@ -1111,16 +1162,16 @@ public unsafe class SilkViewportControl : NativeControlHost
             WebGpuBuffer.FromNative((nint)_gridUniformBuffer), in gridUniforms);
 
         // A. Draw Scene Objects
-        bool wireframe = Scene?.IsWireframe == true;
+        bool wireframe = scene?.IsWireframe == true;
 
         Vector3 lightDir = Vector3.Normalize(new Vector3(0.5f, 1.0f, 0.7f));
         SelectionRenderData? selection = null;
 
-        if (Scene != null)
+        if (scene != null)
         {
             CleanupMeshResources();
 
-            var visibleObjects = Scene.GameObjects
+            var visibleObjects = scene.GameObjects
                 .Select(gameObject => gameObject.ModelRenderer?.SceneObject)
                 .Where(obj => obj is { IsVisible: true })
                 .Cast<SceneObject>()
@@ -1326,15 +1377,16 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void UpdateKeyboardMovement(float deltaTime)
     {
-        if (Scene == null || deltaTime <= 0f) return;
+        Scene? scene = _renderScene;
+        if (scene == null || deltaTime <= 0f) return;
 
         // The WebGPU viewport is hosted in a native child HWND. Polling the
         // keys while that HWND owns focus avoids depending on Avalonia's
         // routed keyboard events crossing the native-control boundary.
-        if (_hwnd != nint.Zero && GetFocus() == _hwnd)
+        if (_hwnd != nint.Zero && IsViewportWindowActive())
         {
-            SetMovementKey(VK_W, IsKeyDown(VK_W));
-            SetMovementKey(VK_A, IsKeyDown(VK_A));
+            SetMovementKey(VK_Z, IsKeyDown(VK_Z));
+            SetMovementKey(VK_Q, IsKeyDown(VK_Q));
             SetMovementKey(VK_S, IsKeyDown(VK_S));
             SetMovementKey(VK_D, IsKeyDown(VK_D));
         }
@@ -1347,8 +1399,8 @@ public unsafe class SilkViewportControl : NativeControlHost
         float strafeInput = (_moveRight ? 1f : 0f) - (_moveLeft ? 1f : 0f);
         if (forwardInput == 0f && strafeInput == 0f) return;
 
-        float yawRad = MathF.PI / 180f * Scene.CameraYaw;
-        float pitchRad = MathF.PI / 180f * Scene.CameraPitch;
+        float yawRad = MathF.PI / 180f * scene.CameraYaw;
+        float pitchRad = MathF.PI / 180f * scene.CameraPitch;
         Vector3 forward = GetCameraForward(yawRad, pitchRad);
         Vector3 right = new(MathF.Cos(yawRad), 0f, -MathF.Sin(yawRad));
         Vector3 direction = forward * forwardInput + right * strafeInput;
@@ -1420,15 +1472,15 @@ public unsafe class SilkViewportControl : NativeControlHost
     {
         switch (key)
         {
-            case VK_W: _moveForward = isDown; break;
+            case VK_Z: _moveForward = isDown; break;
             case VK_S: _moveBackward = isDown; break;
-            case VK_A: _moveLeft = isDown; break;
+            case VK_Q: _moveLeft = isDown; break;
             case VK_D: _moveRight = isDown; break;
         }
     }
 
     private static bool IsMovementKey(int key) =>
-        key is VK_W or VK_S or VK_A or VK_D;
+        key is VK_Z or VK_S or VK_Q or VK_D;
 
     private void ClearMovementKeys()
     {
@@ -1495,12 +1547,18 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void MoveCamera(Vector3 offset)
     {
-        Scene?.MoveCamera(offset);
+        (_renderScene ?? Scene)?.MoveCamera(offset);
     }
 
     private static int GetMouseX(nint lParam) => (short)((long)lParam & 0xFFFF);
     private static int GetMouseY(nint lParam) => (short)(((long)lParam >> 16) & 0xFFFF);
     private static bool IsKeyDown(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
+
+    private bool IsViewportWindowActive()
+    {
+        nint rootWindow = GetAncestor(_hwnd, GA_ROOT);
+        return rootWindow != nint.Zero && GetForegroundWindow() == rootWindow;
+    }
 
     private void CleanupWebGpu()
     {
@@ -1573,8 +1631,8 @@ public unsafe class SilkViewportControl : NativeControlHost
     private const uint WM_KEYDOWN = 0x0100;
     private const uint WM_KEYUP = 0x0101;
     private const uint WM_KILLFOCUS = 0x0008;
-    private const int VK_W = 0x57;
-    private const int VK_A = 0x41;
+    private const int VK_Z = 0x5A;
+    private const int VK_Q = 0x51;
     private const int VK_S = 0x53;
     private const int VK_D = 0x44;
 
@@ -1591,10 +1649,15 @@ public unsafe class SilkViewportControl : NativeControlHost
     private static extern nint SetFocus(nint hWnd);
 
     [DllImport("user32.dll")]
-    private static extern nint GetFocus();
+    private static extern short GetAsyncKeyState(int vKey);
 
     [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
+    private static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern nint GetAncestor(nint hWnd, uint gaFlags);
+
+    private const uint GA_ROOT = 2;
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();

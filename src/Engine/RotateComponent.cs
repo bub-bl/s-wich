@@ -8,7 +8,7 @@ public sealed class RotateComponent : Component
     {
         if (GameObject?.ModelRenderer?.SceneObject is not { } sceneObject)
             return;
-
+        
         sceneObject.RotationY = (sceneObject.RotationY + Speed * deltaTime) % 360f;
     }
 }
