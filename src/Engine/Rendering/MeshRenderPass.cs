@@ -65,7 +65,9 @@ public sealed class MeshRenderPass
         }
     }
 
-    internal static Model? GetModel(SceneObject obj) => (obj.Renderer as ModelRenderer)?.Model;
+    internal static ModelRenderer? GetModelRenderer(SceneObject obj) => obj.Renderer?.GameObject?.ModelRenderer;
+
+    internal static Model? GetModel(SceneObject obj) => GetModelRenderer(obj)?.Model;
 
     private bool ShouldRender(SceneObject obj, MeshRenderContext context) => _mode switch
     {
@@ -84,7 +86,8 @@ public sealed class MeshRenderPass
                           * Matrix4x4.CreateTranslation(obj.PositionX, obj.PositionY, obj.PositionZ);
 
         Vector4 color = context.GetColor(obj);
-        Model? modelAsset = (obj.Renderer as ModelRenderer)?.Model;
+        ModelRenderer? modelRenderer = GetModelRenderer(obj);
+        Model? modelAsset = modelRenderer?.Model;
         if (modelAsset?.Materials.FirstOrDefault() is { } modelMaterial)
         {
             Vector3 tinted = new Vector3(color.X, color.Y, color.Z)
