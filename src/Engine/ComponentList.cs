@@ -17,9 +17,9 @@ public sealed class ComponentList : IReadOnlyList<Component>
         _components.Add(component);
     }
 
-    public void RemoveComponent(Component component)
+    public bool RemoveComponent(Component component)
     {
-        _components.Remove(component);
+        return _components.Remove(component);
     }
 
     public T? GetComponent<T>() where T : Component

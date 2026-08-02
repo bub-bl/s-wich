@@ -6,48 +6,51 @@ public sealed class GameObject
 
     public IReadOnlyList<Component> Components => _components;
     public ModelRenderer? ModelRenderer { get; private set; }
-
-    public Transform Transform { get; set; } = Transform.Zero;
+    internal Scene? Scene { get; set; }
     public bool IsValid { get; private set; } = true;
-
-    public GameObject()
-    {
-        Scene.Current?.AddGameObject(this);
-    }
 
     public void AddComponent(Component component)
     {
+        ArgumentNullException.ThrowIfNull(component);
+        if (!IsValid) throw new InvalidOperationException("Cannot add a component to a destroyed GameObject.");
+        if (component.GameObject is not null && !ReferenceEquals(component.GameObject, this))
+            throw new InvalidOperationException("The component already belongs to another GameObject.");
+
         component.GameObject = this;
         _components.AddComponent(component);
         if (component is ModelRenderer modelRenderer)
             ModelRenderer = modelRenderer;
+        component.OnStart();
     }
 
     public void AddComponent<T>(T component) where T : Component
     {
-        component.GameObject = this;
-        _components.AddComponent(component);
-        if (component is ModelRenderer modelRenderer)
-            ModelRenderer = modelRenderer;
+        AddComponent((Component)component);
     }
 
     public void RemoveComponent(Component component)
     {
-        _components.RemoveComponent(component);
+        if (!_components.RemoveComponent(component)) return;
+
         if (ReferenceEquals(ModelRenderer, component))
             ModelRenderer = null;
+        component.GameObject = null;
     }
 
     public void RemoveComponent<T>(T component) where T : Component
     {
-        _components.RemoveComponent(component);
-        if (ReferenceEquals(ModelRenderer, component))
-            ModelRenderer = null;
+        RemoveComponent((Component)component);
     }
 
     public T? GetComponent<T>() where T : Component
     {
-        return _components.OfType<T>().FirstOrDefault();
+        foreach (Component component in _components)
+        {
+            if (component is T typedComponent)
+                return typedComponent;
+        }
+
+        return null;
     }
 
     public IEnumerable<T> GetComponents<T>() where T : Component
@@ -57,13 +60,15 @@ public sealed class GameObject
 
     public void Destroy()
     {
+        if (!IsValid) return;
+
         IsValid = false;
 
-        foreach (var component in _components)
+        foreach (Component component in _components.ToArray())
         {
             component.Destroy();
         }
 
-        Scene.Current?.RemoveGameObject(this);
+        Scene?.RemoveGameObject(this);
     }
 }

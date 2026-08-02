@@ -144,13 +144,29 @@ public class Scene : IValid, INotifyPropertyChanged
     
     public void AddGameObject(GameObject gameObject)
     {
+        ArgumentNullException.ThrowIfNull(gameObject);
+        if (!gameObject.IsValid) throw new InvalidOperationException("Cannot add a destroyed GameObject to a Scene.");
+        if (gameObject.Scene is not null && !ReferenceEquals(gameObject.Scene, this))
+            throw new InvalidOperationException("The GameObject already belongs to another Scene.");
         if (!GameObjects.Contains(gameObject))
+        {
             GameObjects.Add(gameObject);
+            gameObject.Scene = this;
+        }
     }
 
     public bool RemoveGameObject(GameObject gameObject)
     {
-        return GameObjects.Remove(gameObject);
+        bool removed = GameObjects.Remove(gameObject);
+        if (removed && ReferenceEquals(gameObject.Scene, this))
+            gameObject.Scene = null;
+        return removed;
+    }
+
+    public void ClearGameObjects()
+    {
+        foreach (GameObject gameObject in GameObjects.ToArray())
+            gameObject.Destroy();
     }
 
     public void ResetCamera()

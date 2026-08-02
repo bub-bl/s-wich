@@ -11,4 +11,10 @@ public sealed class ModelRenderer : Renderer
     public SceneObject SceneObject { get; }
 
     [Property] public Model? Model { get; set; }
+
+    protected internal override void OnDestroy()
+    {
+        if (ReferenceEquals(SceneObject.OwnerRenderer, this))
+            SceneObject.OwnerRenderer = null;
+    }
 }

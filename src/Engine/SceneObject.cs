@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace Crowbar.Engine;
 
-public class SceneObject : INotifyPropertyChanged
+public sealed class SceneObject : INotifyPropertyChanged
 {
     internal Renderer? OwnerRenderer { get; set; }
     public Renderer? Renderer => OwnerRenderer;
@@ -114,16 +114,6 @@ public class SceneObject : INotifyPropertyChanged
         get;
         set => SetField(ref field, value);
     } = "Cube";
-
-    /// <summary>
-    /// Optional imported model. When set, the renderer uses it instead of the
-    /// built-in cube or pyramid selected by <see cref="MeshType"/>.
-    /// </summary>
-    public Model? Model
-    {
-        get;
-        set => SetField(ref field, value);
-    }
 
     public Material? Material
     {

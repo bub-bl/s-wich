@@ -196,7 +196,7 @@ public partial class MainWindow : Window
 
     private void OnNewSceneClick(object? sender, RoutedEventArgs e)
     {
-        Scene.GameObjects.Clear();
+        Scene.ClearGameObjects();
         InitDefaultScene();
         Log("New scene loaded.");
     }
