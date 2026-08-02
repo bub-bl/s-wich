@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using System.Numerics;
+using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
 
 namespace Crowbar.Engine;
@@ -41,4 +43,22 @@ public sealed class WebGpuRuntime : IDisposable
         Api.Dispose();
         Console.WriteLine("Disposed WebGPU runtime.");
     }
+
+    internal void SetPipeline(WebGpuRenderPassEncoder pass, WebGpuRenderPipeline pipeline) =>
+        WebGpuNative.SetPipeline(Api, pass, pipeline);
+
+    internal void WriteBuffer(WebGpuQueue queue, WebGpuBuffer buffer, in MeshUniforms data) =>
+        WebGpuNative.WriteBuffer(Api, queue, buffer, in data);
+
+    internal void SetBindGroup(WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup) =>
+        WebGpuNative.SetBindGroup(Api, pass, bindGroup);
+
+    internal void SetVertexBuffer(WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, ulong size) =>
+        WebGpuNative.SetVertexBuffer(Api, pass, buffer, size);
+
+    internal void SetIndexBuffer(WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, IndexFormat format, ulong size) =>
+        WebGpuNative.SetIndexBuffer(Api, pass, buffer, format, size);
+
+    internal void DrawIndexed(WebGpuRenderPassEncoder pass, uint indexCount) =>
+        WebGpuNative.DrawIndexed(Api, pass, indexCount);
 }

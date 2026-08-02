@@ -463,8 +463,8 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         resources = new MeshGpuResources
         {
-            UniformBuffer = uniformBuffer,
-            BindGroup = WebGpuApi.Wgpu.DeviceCreateBindGroup(_device!, in bindGroupDesc)
+            UniformBuffer = WebGpuBuffer.FromNative((nint)uniformBuffer),
+            BindGroup = WebGpuBindGroup.FromNative((nint)WebGpuApi.Wgpu.DeviceCreateBindGroup(_device!, in bindGroupDesc))
         };
 
         if (obj.Model != null)
@@ -502,10 +502,10 @@ public unsafe class SilkViewportControl : NativeControlHost
 
                 resources.ModelMeshes.Add(new ModelGpuMesh
                 {
-                    VertexBuffer = CreateGpuBuffer(vertices, BufferUsage.Vertex),
+                    VertexBuffer = WebGpuBuffer.FromNative((nint)CreateGpuBuffer(vertices, BufferUsage.Vertex)),
                     VertexBufferSize = (ulong)(vertices.Length * sizeof(float)),
-                    IndexBuffer = CreateGpuBuffer(indices, BufferUsage.Index),
-                    WireframeIndexBuffer = CreateGpuBuffer(wireframeIndices, BufferUsage.Index),
+                    IndexBuffer = WebGpuBuffer.FromNative((nint)CreateGpuBuffer(indices, BufferUsage.Index)),
+                    WireframeIndexBuffer = WebGpuBuffer.FromNative((nint)CreateGpuBuffer(wireframeIndices, BufferUsage.Index)),
                     IndexCount = (uint)indices.Length,
                     WireframeIndexCount = (uint)wireframeIndices.Length
                 });
@@ -547,22 +547,23 @@ public unsafe class SilkViewportControl : NativeControlHost
             ReleaseBuffer(mesh.WireframeIndexBuffer);
         }
 
-        if (resources.BindGroup != null)
+        if (resources.BindGroup.NativeHandle != nint.Zero)
         {
-            WebGpuApi.Wgpu.BindGroupRelease(resources.BindGroup);
+            WebGpuApi.Wgpu.BindGroupRelease((BindGroup*)resources.BindGroup.NativeHandle);
         }
 
-        if (resources.UniformBuffer != null)
+        if (resources.UniformBuffer.NativeHandle != nint.Zero)
         {
-            WebGpuApi.Wgpu.BufferDestroy(resources.UniformBuffer);
-            WebGpuApi.Wgpu.BufferRelease(resources.UniformBuffer);
+            WebGpuApi.Wgpu.BufferDestroy((Buffer*)resources.UniformBuffer.NativeHandle);
+            WebGpuApi.Wgpu.BufferRelease((Buffer*)resources.UniformBuffer.NativeHandle);
         }
     }
 
-    private void ReleaseBuffer(Buffer* buffer)
+    private void ReleaseBuffer(WebGpuBuffer bufferHandle)
     {
-        if (buffer != null)
+        if (bufferHandle.NativeHandle != nint.Zero)
         {
+            Buffer* buffer = (Buffer*)bufferHandle.NativeHandle;
             WebGpuApi.Wgpu.BufferDestroy(buffer);
             WebGpuApi.Wgpu.BufferRelease(buffer);
         }
@@ -717,12 +718,12 @@ public unsafe class SilkViewportControl : NativeControlHost
         outlineDepthStencilState.DepthCompare = CompareFunction.LessEqual;
         wireframePipelineDesc.DepthStencil = &outlineDepthStencilState;
         _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
-        MeshRenderPipeline meshPipeline = UnsafeMeshRenderPass.CreatePipeline(_meshPipeline);
-        MeshRenderPipeline transparentMeshPipeline = UnsafeMeshRenderPass.CreatePipeline(_transparentMeshPipeline);
-        MeshRenderPipeline wireframePipeline = UnsafeMeshRenderPass.CreatePipeline(_wireframePipeline);
-        _opaqueMeshPass = new OpaqueMeshRenderPass(meshPipeline);
-        _transparentMeshPass = new TransparentMeshRenderPass(transparentMeshPipeline);
-        _wireframeMeshPass = new WireframeMeshRenderPass(wireframePipeline);
+        WebGpuRenderPipeline meshPipeline = MeshRenderPass.CreatePipeline((nint)_meshPipeline);
+        WebGpuRenderPipeline transparentMeshPipeline = MeshRenderPass.CreatePipeline((nint)_transparentMeshPipeline);
+        WebGpuRenderPipeline wireframePipeline = MeshRenderPass.CreatePipeline((nint)_wireframePipeline);
+        _opaqueMeshPass = new MeshRenderPass(meshPipeline, MeshRenderPassMode.Opaque);
+        _transparentMeshPass = new MeshRenderPass(transparentMeshPipeline, MeshRenderPassMode.Transparent);
+        _wireframeMeshPass = new MeshRenderPass(wireframePipeline, MeshRenderPassMode.Wireframe);
 
         var outlineFragmentState = fragmentState;
         var outlineFsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("fs_outline").Name);
@@ -986,26 +987,26 @@ public unsafe class SilkViewportControl : NativeControlHost
                 }
             }
 
-            var meshContext = new MeshRenderContext(new UnsafeMeshRenderContext
+            var meshContext = new MeshRenderContext
             {
                 Runtime = WebGpuApi,
-                Pass = pass,
-                Queue = _queue,
+                Pass = WebGpuRenderPassEncoder.FromNative((nint)pass),
+                Queue = WebGpuQueue.FromNative((nint)_queue),
                 View = view,
                 Proj = proj,
                 LightDirection = lightDir,
                 CameraPosition = eye,
-                CubeVertexBuffer = _cubeVbo,
-                CubeIndexBuffer = _cubeEbo,
-                CubeWireframeIndexBuffer = _cubeWireframeEbo,
-                PyramidVertexBuffer = _pyramidVbo,
-                PyramidIndexBuffer = _pyramidEbo,
-                PyramidWireframeIndexBuffer = _pyramidWireframeEbo,
+                CubeVertexBuffer = WebGpuBuffer.FromNative((nint)_cubeVbo),
+                CubeIndexBuffer = WebGpuBuffer.FromNative((nint)_cubeEbo),
+                CubeWireframeIndexBuffer = WebGpuBuffer.FromNative((nint)_cubeWireframeEbo),
+                PyramidVertexBuffer = WebGpuBuffer.FromNative((nint)_pyramidVbo),
+                PyramidIndexBuffer = WebGpuBuffer.FromNative((nint)_pyramidEbo),
+                PyramidWireframeIndexBuffer = WebGpuBuffer.FromNative((nint)_pyramidWireframeEbo),
                 GetResources = GetMeshResources,
                 GetColor = GetMaterialColor,
                 GetLightDirection = GetMaterialLightDirection,
                 Wireframe = wireframe
-            });
+            };
 
             if (wireframe)
             {
@@ -1041,13 +1042,16 @@ public unsafe class SilkViewportControl : NativeControlHost
                 LightDir = GetMaterialLightDirection(selection.Object, lightDir),
                 IsSelected = 0u
             };
-            WebGpuApi.Wgpu.QueueWriteBuffer(_queue, selection.Resources.UniformBuffer, 0, &outlineUniforms, (nuint)sizeof(MeshUniforms));
+            WebGpuApi.WriteBuffer(WebGpuQueue.FromNative((nint)_queue), selection.Resources.UniformBuffer,
+                in outlineUniforms);
 
             WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
-            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
+            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0,
+                (BindGroup*)selection.Resources.BindGroup.NativeHandle, 0, null);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                UnsafeMeshRenderPass.DrawModel(WebGpuApi, pass, selection.Resources, wireframe: false);
+                MeshRenderPass.DrawModel(WebGpuApi, WebGpuRenderPassEncoder.FromNative((nint)pass),
+                    selection.Resources, wireframe: false);
             }
             else
             {
@@ -1055,10 +1059,12 @@ public unsafe class SilkViewportControl : NativeControlHost
             }
 
             WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
-            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
+            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0,
+                (BindGroup*)selection.Resources.BindGroup.NativeHandle, 0, null);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                UnsafeMeshRenderPass.DrawModel(WebGpuApi, pass, selection.Resources, wireframe: false);
+                MeshRenderPass.DrawModel(WebGpuApi, WebGpuRenderPassEncoder.FromNative((nint)pass),
+                    selection.Resources, wireframe: false);
             }
             else
             {

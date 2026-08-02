@@ -1,7 +1,5 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Silk.NET.WebGPU;
-using Buffer = Silk.NET.WebGPU.Buffer;
 
 namespace Crowbar.Engine.Rendering;
 
@@ -16,19 +14,19 @@ internal struct MeshUniforms
     public uint IsSelected;
 }
 
-internal unsafe sealed class MeshGpuResources
+internal sealed class MeshGpuResources
 {
-    public Buffer* UniformBuffer;
-    public BindGroup* BindGroup;
+    public WebGpuBuffer UniformBuffer;
+    public WebGpuBindGroup BindGroup;
     public List<ModelGpuMesh> ModelMeshes { get; } = [];
 }
 
-internal unsafe sealed class ModelGpuMesh
+internal sealed class ModelGpuMesh
 {
-    public Buffer* VertexBuffer;
+    public WebGpuBuffer VertexBuffer;
     public ulong VertexBufferSize;
-    public Buffer* IndexBuffer;
-    public Buffer* WireframeIndexBuffer;
+    public WebGpuBuffer IndexBuffer;
+    public WebGpuBuffer WireframeIndexBuffer;
     public uint IndexCount;
     public uint WireframeIndexCount;
 }
@@ -40,44 +38,31 @@ internal sealed class SelectionRenderData
     public MeshGpuResources Resources { get; init; } = null!;
 }
 
+/// <summary>
+/// Safe data passed to a mesh render pass for one render pass encoder.
+/// Native WebGPU handles are intentionally represented as opaque values.
+/// </summary>
 public sealed class MeshRenderContext
 {
-    internal UnsafeMeshRenderContext UnsafeContext { get; }
+    internal WebGpuRuntime Runtime { get; init; } = null!;
+    internal WebGpuRenderPassEncoder Pass { get; init; }
+    internal WebGpuQueue Queue { get; init; }
+    internal Matrix4x4 View { get; init; }
+    internal Matrix4x4 Proj { get; init; }
+    internal Vector3 LightDirection { get; init; }
+    internal Vector3 CameraPosition { get; init; }
+    internal bool Wireframe { get; init; }
 
-    internal MeshRenderContext(UnsafeMeshRenderContext unsafeContext)
-    {
-        UnsafeContext = unsafeContext;
-    }
+    internal WebGpuBuffer CubeVertexBuffer { get; init; }
+    internal WebGpuBuffer CubeIndexBuffer { get; init; }
+    internal WebGpuBuffer CubeWireframeIndexBuffer { get; init; }
+    internal WebGpuBuffer PyramidVertexBuffer { get; init; }
+    internal WebGpuBuffer PyramidIndexBuffer { get; init; }
+    internal WebGpuBuffer PyramidWireframeIndexBuffer { get; init; }
 
-    internal SelectionRenderData? Selection
-    {
-        get => UnsafeContext.Selection;
-        set => UnsafeContext.Selection = value;
-    }
-}
+    internal Func<SceneObject, MeshGpuResources> GetResources { get; init; } = null!;
+    internal Func<SceneObject, Vector4> GetColor { get; init; } = null!;
+    internal Func<SceneObject, Vector3, Vector3> GetLightDirection { get; init; } = null!;
 
-internal unsafe sealed class UnsafeMeshRenderContext
-{
-    public required WebGpuRuntime Runtime;
-    public RenderPassEncoder* Pass;
-    public Queue* Queue;
-    public Matrix4x4 View;
-    public Matrix4x4 Proj;
-    public Vector3 LightDirection;
-    public Vector3 CameraPosition;
-    public RenderPipeline* Pipeline;
-    public bool Wireframe;
-
-    public Buffer* CubeVertexBuffer;
-    public Buffer* CubeIndexBuffer;
-    public Buffer* CubeWireframeIndexBuffer;
-    public Buffer* PyramidVertexBuffer;
-    public Buffer* PyramidIndexBuffer;
-    public Buffer* PyramidWireframeIndexBuffer;
-
-    public required Func<SceneObject, MeshGpuResources> GetResources;
-    public required Func<SceneObject, Vector4> GetColor;
-    public required Func<SceneObject, Vector3, Vector3> GetLightDirection;
-
-    public SelectionRenderData? Selection { get; set; }
+    internal SelectionRenderData? Selection { get; set; }
 }
