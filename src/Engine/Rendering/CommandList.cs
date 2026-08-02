@@ -2,12 +2,49 @@ using System.Numerics;
 
 namespace Crowbar.Engine.Rendering;
 
+public enum RenderAttachmentLoadOp
+{
+    Load,
+    Clear
+}
+
+public enum RenderAttachmentStoreOp
+{
+    Store,
+    Discard
+}
+
+/// <summary>
+/// Safe engine representation of a color render target. It deliberately does
+/// not expose Silk.NET's native attachment structure or pointer fields.
+/// </summary>
+public sealed class ColorAttachment
+{
+    public required WebGpuTextureView View { get; init; }
+    public RenderAttachmentLoadOp LoadOp { get; init; } = RenderAttachmentLoadOp.Clear;
+    public RenderAttachmentStoreOp StoreOp { get; init; } = RenderAttachmentStoreOp.Store;
+    public Vector4 ClearColor { get; init; } = new(0.12f, 0.12f, 0.14f, 1.0f);
+}
+
+/// <summary>
+/// Safe engine representation of a depth render target.
+/// </summary>
+public sealed class DepthAttachment
+{
+    public required WebGpuTextureView View { get; init; }
+    public RenderAttachmentLoadOp LoadOp { get; init; } = RenderAttachmentLoadOp.Clear;
+    public RenderAttachmentStoreOp StoreOp { get; init; } = RenderAttachmentStoreOp.Store;
+    public float ClearValue { get; init; } = 1.0f;
+}
+
+/// <summary>
+/// Safe render-pass description. The conversion to Silk.NET structures is
+/// performed only inside the engine's native WebGPU boundary.
+/// </summary>
 public sealed class RenderPassDescription
 {
-    public required WebGpuTextureView ColorView { get; init; }
-    public WebGpuTextureView? DepthView { get; init; }
-    public Vector4 ClearColor { get; init; } = new(0.12f, 0.12f, 0.14f, 1.0f);
-    public float DepthClearValue { get; init; } = 1.0f;
+    public required ColorAttachment Color { get; init; }
+    public DepthAttachment? Depth { get; init; }
 }
 
 public enum WebGpuIndexFormat
@@ -38,8 +75,11 @@ public sealed class CommandList : IDisposable
         if (_disposed) throw new ObjectDisposedException(nameof(CommandList));
         if (_submitted) throw new InvalidOperationException("The command list has already been submitted.");
         if (_activePass != null) throw new InvalidOperationException("A render pass is already active.");
-        if (description.ColorView.NativeHandle == 0)
-            throw new ArgumentException("A color attachment is required.", nameof(description));
+        ArgumentNullException.ThrowIfNull(description.Color);
+        if (description.Color.View.NativeHandle == 0)
+            throw new ArgumentException("A valid color attachment is required.", nameof(description));
+        if (description.Depth is { View.NativeHandle: 0 })
+            throw new ArgumentException("The depth attachment must contain a valid view.", nameof(description));
 
         var handle = _runtime.BeginRenderPass(_encoder, description);
         _activePass = new RenderPass(this, _runtime, handle);

@@ -1,5 +1,4 @@
 using System.Numerics;
-using Silk.NET.WebGPU;
 
 namespace Crowbar.Engine.Rendering;
 

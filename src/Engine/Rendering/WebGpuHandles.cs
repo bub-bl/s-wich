@@ -1,5 +1,19 @@
 namespace Crowbar.Engine.Rendering;
 
+/// <summary>Opaque safe handle for a WebGPU surface.</summary>
+public readonly struct WebGpuSurface
+{
+    internal nint NativeHandle { get; }
+
+    internal WebGpuSurface(nint nativeHandle) => NativeHandle = Require(nativeHandle);
+
+    internal static WebGpuSurface FromNative(nint nativeHandle) => new(nativeHandle);
+
+    private static nint Require(nint handle) => handle == 0
+        ? throw new ArgumentException("A valid WebGPU surface handle is required.", nameof(handle))
+        : handle;
+}
+
 /// <summary>Opaque safe handle for a WebGPU queue.</summary>
 public readonly struct WebGpuQueue
 {

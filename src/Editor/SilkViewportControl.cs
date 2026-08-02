@@ -234,11 +234,11 @@ public unsafe class SilkViewportControl : NativeControlHost
         };
 
         _surface = WebGpuApi.Wgpu.InstanceCreateSurface(WebGpuApi.Instance.UnsafeHandle, in surfaceDesc);
-        _adapterWrapper = new WebGpuAdapter(WebGpuApi, (nint)_surface);
+        _adapterWrapper = new WebGpuAdapter(WebGpuApi, WebGpuSurface.FromNative((nint)_surface));
         _adapter = _adapterWrapper.UnsafeHandle;
         _deviceWrapper = _adapterWrapper.CreateDevice();
         _device = _deviceWrapper.UnsafeHandle;
-        _queue = _deviceWrapper.GetQueue();
+        _queue = _deviceWrapper.GetUnsafeQueue();
 
         WebGpuApi.ConfigureDebugCallback(_deviceWrapper);
 
@@ -927,10 +927,20 @@ public unsafe class SilkViewportControl : NativeControlHost
         using CommandList commandList = _deviceWrapper!.CreateCommandList();
         using RenderPass renderPass = commandList.BeginRenderPass(new RenderPassDescription
         {
-            ColorView = WebGpuTextureView.FromNative((nint)targetView),
-            DepthView = WebGpuTextureView.FromNative((nint)_depthTextureView),
-            ClearColor = new Vector4(0.12f, 0.12f, 0.14f, 1.0f),
-            DepthClearValue = 1.0f
+            Color = new ColorAttachment
+            {
+                View = WebGpuTextureView.FromNative((nint)targetView),
+                LoadOp = RenderAttachmentLoadOp.Clear,
+                StoreOp = RenderAttachmentStoreOp.Store,
+                ClearColor = new Vector4(0.12f, 0.12f, 0.14f, 1.0f)
+            },
+            Depth = new DepthAttachment
+            {
+                View = WebGpuTextureView.FromNative((nint)_depthTextureView),
+                LoadOp = RenderAttachmentLoadOp.Clear,
+                StoreOp = RenderAttachmentStoreOp.Store,
+                ClearValue = 1.0f
+            }
         });
 
         // Prepare the grid uniforms. The grid itself is drawn after the scene

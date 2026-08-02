@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
 
 namespace Crowbar.Engine;
@@ -8,10 +9,9 @@ public sealed class WebGpuAdapter : IDisposable
     private readonly WebGpuRuntime _runtime;
     private nint _nativeHandle;
 
-    public WebGpuAdapter(WebGpuRuntime runtime, nint surfaceHandle)
+    public WebGpuAdapter(WebGpuRuntime runtime, WebGpuSurface surface)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-        if (surfaceHandle == 0) throw new ArgumentException("A surface handle is required.", nameof(surfaceHandle));
 
         var adapterOptions = new RequestAdapterOptions
         {
@@ -21,7 +21,7 @@ public sealed class WebGpuAdapter : IDisposable
 
         unsafe
         {
-            adapterOptions.CompatibleSurface = (Surface*)surfaceHandle;
+            adapterOptions.CompatibleSurface = (Surface*)surface.NativeHandle;
         }
 
         var callback = PfnRequestAdapterCallback.From((status, adapter, msgPtr, userDataPtr) =>

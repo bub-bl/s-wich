@@ -68,28 +68,28 @@ internal static unsafe class WebGpuNative
     {
         var colorAttachment = new RenderPassColorAttachment
         {
-            View = (TextureView*)description.ColorView.NativeHandle,
-            LoadOp = LoadOp.Clear,
-            StoreOp = StoreOp.Store,
+            View = (TextureView*)description.Color.View.NativeHandle,
+            LoadOp = ToNative(description.Color.LoadOp),
+            StoreOp = ToNative(description.Color.StoreOp),
             ClearValue = new Color
             {
-                R = description.ClearColor.X,
-                G = description.ClearColor.Y,
-                B = description.ClearColor.Z,
-                A = description.ClearColor.W
+                R = description.Color.ClearColor.X,
+                G = description.Color.ClearColor.Y,
+                B = description.Color.ClearColor.Z,
+                A = description.Color.ClearColor.W
             }
         };
 
         RenderPassDepthStencilAttachment depthAttachment = default;
         RenderPassDepthStencilAttachment* depthAttachmentPtr = null;
-        if (description.DepthView.HasValue)
+        if (description.Depth is not null)
         {
             depthAttachment = new RenderPassDepthStencilAttachment
             {
-                View = (TextureView*)description.DepthView.Value.NativeHandle,
-                DepthLoadOp = LoadOp.Clear,
-                DepthStoreOp = StoreOp.Store,
-                DepthClearValue = description.DepthClearValue
+                View = (TextureView*)description.Depth.View.NativeHandle,
+                DepthLoadOp = ToNative(description.Depth.LoadOp),
+                DepthStoreOp = ToNative(description.Depth.StoreOp),
+                DepthClearValue = description.Depth.ClearValue
             };
             depthAttachmentPtr = &depthAttachment;
         }
@@ -104,6 +104,20 @@ internal static unsafe class WebGpuNative
         return new((nint)api.CommandEncoderBeginRenderPass(
             (CommandEncoder*)encoder.NativeHandle, in descriptor));
     }
+
+    private static LoadOp ToNative(RenderAttachmentLoadOp op) => op switch
+    {
+        RenderAttachmentLoadOp.Load => LoadOp.Load,
+        RenderAttachmentLoadOp.Clear => LoadOp.Clear,
+        _ => throw new ArgumentOutOfRangeException(nameof(op))
+    };
+
+    private static StoreOp ToNative(RenderAttachmentStoreOp op) => op switch
+    {
+        RenderAttachmentStoreOp.Store => StoreOp.Store,
+        RenderAttachmentStoreOp.Discard => StoreOp.Discard,
+        _ => throw new ArgumentOutOfRangeException(nameof(op))
+    };
 
     internal static void EndRenderPass(WebGPU api, WebGpuRenderPassEncoder pass) =>
         api.RenderPassEncoderEnd((RenderPassEncoder*)pass.NativeHandle);

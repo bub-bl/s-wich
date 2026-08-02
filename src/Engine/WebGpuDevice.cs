@@ -38,18 +38,18 @@ public sealed class WebGpuDevice : IDisposable
     internal nint NativeHandle => _nativeHandle;
     internal unsafe Device* UnsafeHandle => (Device*)_nativeHandle;
 
-    internal unsafe Queue* GetQueue() => (Queue*)GetQueueHandle();
-
-    public nint GetQueueHandle()
+    public WebGpuQueue GetQueue()
     {
         unsafe
         {
-            return (nint)_runtime.Api.DeviceGetQueue(UnsafeHandle);
+            return WebGpuQueue.FromNative((nint)_runtime.Api.DeviceGetQueue(UnsafeHandle));
         }
     }
 
+    internal unsafe Queue* GetUnsafeQueue() => (Queue*)GetQueue().NativeHandle;
+
     public CommandList CreateCommandList() =>
-        new(_runtime, _runtime.CreateCommandEncoder(this), WebGpuQueue.FromNative(GetQueueHandle()));
+        new(_runtime, _runtime.CreateCommandEncoder(this), GetQueue());
 
     public void Dispose()
     {
