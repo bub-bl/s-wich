@@ -17,13 +17,13 @@ public readonly union ShaderParameter(float, Vector2, Vector3, Vector4, Matrix4x
     public string TypeName => this switch
     {
         float => "f32",
-        Vector2 => "vec2<f32>",
-        Vector3 => "vec3<f32>",
-        Vector4 => "vec4<f32>",
-        Matrix4x4 => "mat4x4<f32>",
         int => "i32",
         uint => "u32",
         bool => "bool",
+        Vector2 => "vec2f",
+        Vector3 => "vec3f",
+        Vector4 => "vec4f",
+        Matrix4x4 => "mat4f",
         _ => throw new NotImplementedException()
     };
 
@@ -32,10 +32,10 @@ public readonly union ShaderParameter(float, Vector2, Vector3, Vector4, Matrix4x
         return type switch
         {
             "f32" => new ShaderParameterDefinition(name, typeof(float)),
-            "vec2<f32>" => new ShaderParameterDefinition(name, typeof(Vector2)),
-            "vec3<f32>" => new ShaderParameterDefinition(name, typeof(Vector3)),
-            "vec4<f32>" => new ShaderParameterDefinition(name, typeof(Vector4)),
-            "mat4x4<f32>" => new ShaderParameterDefinition(name, typeof(Matrix4x4)),
+            "vec2<f32>" or "vec2f" => new ShaderParameterDefinition(name, typeof(Vector2)),
+            "vec3<f32>" or "vec3f" => new ShaderParameterDefinition(name, typeof(Vector3)),
+            "vec4<f32>" or "vec4f" => new ShaderParameterDefinition(name, typeof(Vector4)),
+            "mat4x4<f32>" or "mat4f" => new ShaderParameterDefinition(name, typeof(Matrix4x4)),
             "i32" => new ShaderParameterDefinition(name, typeof(int)),
             "u32" => new ShaderParameterDefinition(name, typeof(uint)),
             "bool" => new ShaderParameterDefinition(name, typeof(bool)),
@@ -121,10 +121,14 @@ public sealed partial class Shader
         var uniform = UniformPattern.Match(source);
         if (!uniform.Success) return [];
 
-        return [.. FieldPattern.Matches(uniform.Groups["body"].Value)
-            .Select(match => ShaderParameter.TryParseParameter(match.Groups["name"].Value, match.Groups["type"].Value))
-            .Where(parameter => parameter != null)
-            .Select(parameter => parameter!)];
+        return
+        [
+            .. FieldPattern.Matches(uniform.Groups["body"].Value)
+                .Select(match =>
+                    ShaderParameter.TryParseParameter(match.Groups["name"].Value, match.Groups["type"].Value))
+                .Where(parameter => parameter != null)
+                .Select(parameter => parameter!)
+        ];
     }
 
     [GeneratedRegex(@"(?m)^\s*@(?<stage>vertex|fragment|compute)\s+fn\s+(?<name>[A-Za-z_]\w*)\s*\(",

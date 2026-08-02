@@ -20,6 +20,12 @@ public enum ModelFormat
 /// </summary>
 public sealed unsafe class Model
 {
+    public string Path { get; }
+    public string FilePath { get; }
+    public string Name { get; }
+    public ModelFormat Format { get; }
+    public IReadOnlyList<ModelMesh> Meshes { get; }
+
     private Model(string requestedPath, string filePath, ModelFormat format, IReadOnlyList<ModelMesh> meshes)
     {
         Path = requestedPath;
@@ -29,21 +35,16 @@ public sealed unsafe class Model
         Meshes = meshes;
     }
 
-    public string Path { get; }
-    public string FilePath { get; }
-    public string Name { get; }
-    public ModelFormat Format { get; }
-    public IReadOnlyList<ModelMesh> Meshes { get; }
-
     public static Model Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        string? filePath = ResolvePath(path);
+        var filePath = ResolvePath(path);
         if (filePath == null)
             throw new FileNotFoundException($"Model file '{path}' was not found.", path);
 
-        Assimp assimp = Assimp.GetApi();
+        var assimp = Assimp.GetApi();
+
         const PostProcessSteps postProcess =
             PostProcessSteps.Triangulate |
             PostProcessSteps.JoinIdenticalVertices |
@@ -52,19 +53,21 @@ public sealed unsafe class Model
             PostProcessSteps.SortByPrimitiveType |
             PostProcessSteps.ValidateDataStructure;
 
-        AssimpScene* scene = assimp.ImportFile(filePath, (uint)postProcess);
+        var scene = assimp.ImportFile(filePath, (uint)postProcess);
+
         if (scene == null)
         {
-            string error = assimp.GetErrorStringS();
+            var error = assimp.GetErrorStringS();
             throw new FormatException($"Assimp could not import model '{path}': {error}");
         }
 
         try
         {
             var meshes = new List<ModelMesh>((int)scene->MNumMeshes);
+
             for (uint i = 0; i < scene->MNumMeshes; i++)
             {
-                AssimpMesh* mesh = scene->MMeshes[i];
+                var mesh = scene->MMeshes[i];
                 if (mesh == null || mesh->MNumVertices == 0 || mesh->MNumFaces == 0)
                     continue;
 
@@ -84,46 +87,47 @@ public sealed unsafe class Model
 
     private static ModelMesh ConvertMesh(AssimpMesh* mesh, uint meshIndex)
     {
-        int vertexCount = checked((int)mesh->MNumVertices);
+        var vertexCount = checked((int)mesh->MNumVertices);
         var positions = new Vector3[vertexCount];
         var normals = new Vector3[vertexCount];
         var textureCoordinates = new Vector2[vertexCount];
 
-        for (int i = 0; i < vertexCount; i++)
+        for (var i = 0; i < vertexCount; i++)
         {
             positions[i] = mesh->MVertices[i];
             normals[i] = mesh->MNormals == null ? Vector3.UnitY : mesh->MNormals[i];
 
             if (mesh->MTextureCoords.Element0 != null)
             {
-                Vector3 uv = mesh->MTextureCoords.Element0[i];
+                var uv = mesh->MTextureCoords.Element0[i];
                 textureCoordinates[i] = new Vector2(uv.X, uv.Y);
             }
         }
 
         var indices = new List<int>(checked((int)mesh->MNumFaces * 3));
+
         for (uint i = 0; i < mesh->MNumFaces; i++)
         {
-            AssimpFace face = mesh->MFaces[i];
+            var face = mesh->MFaces[i];
+
             for (uint j = 0; j < face.MNumIndices; j++)
                 indices.Add(checked((int)face.MIndices[j]));
         }
 
-        string name = mesh->MName.AsString;
+        var name = mesh->MName.AsString;
         if (string.IsNullOrWhiteSpace(name)) name = $"Mesh_{meshIndex}";
 
         return new ModelMesh(name, positions, normals, textureCoordinates, indices);
     }
 
-    private static ModelFormat GetFormat(string path) =>
-        System.IO.Path.GetExtension(path).ToLowerInvariant() switch
-        {
-            ".obj" => ModelFormat.Obj,
-            ".gltf" => ModelFormat.Gltf,
-            ".glb" => ModelFormat.Glb,
-            ".fbx" => ModelFormat.Fbx,
-            _ => ModelFormat.Other
-        };
+    private static ModelFormat GetFormat(string path) => System.IO.Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".obj" => ModelFormat.Obj,
+        ".gltf" => ModelFormat.Gltf,
+        ".glb" => ModelFormat.Glb,
+        ".fbx" => ModelFormat.Fbx,
+        _ => ModelFormat.Other
+    };
 
     private static string? ResolvePath(string path)
     {
@@ -146,6 +150,12 @@ public sealed unsafe class Model
 /// </summary>
 public sealed class ModelMesh
 {
+    public string Name { get; }
+    public IReadOnlyList<Vector3> Positions { get; }
+    public IReadOnlyList<Vector3> Normals { get; }
+    public IReadOnlyList<Vector2> TextureCoordinates { get; }
+    public IReadOnlyList<int> Indices { get; }
+    
     internal ModelMesh(
         string name,
         IReadOnlyList<Vector3> positions,
@@ -159,10 +169,4 @@ public sealed class ModelMesh
         TextureCoordinates = textureCoordinates;
         Indices = indices;
     }
-
-    public string Name { get; }
-    public IReadOnlyList<Vector3> Positions { get; }
-    public IReadOnlyList<Vector3> Normals { get; }
-    public IReadOnlyList<Vector2> TextureCoordinates { get; }
-    public IReadOnlyList<int> Indices { get; }
 }
