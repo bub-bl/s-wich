@@ -31,6 +31,31 @@
                         <TextBox Text="{Binding Name, Mode=TwoWay}"/>
                     </StackPanel>
 
+                    <ItemsControl ItemsSource="{Binding Components, RelativeSource={RelativeSource AncestorType=editor:InspectorPanel}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#27272A" Padding="8" CornerRadius="3">
+                                    <StackPanel Spacing="7">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#E4E4E7"/>
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}" ToolTip.Tip="Enabled"/>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Properties}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="*, *" Margin="0,2">
+                                                        <TextBlock Text="{Binding Name}" Foreground="#A1A1AA" VerticalAlignment="Center"/>
+                                                        <TextBox Grid.Column="1" Text="{Binding ValueText, Mode=TwoWay}" IsReadOnly="{Binding IsReadOnly}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
                     <Separator Background="#27272A"/>
 
                     <StackPanel Spacing="8">
