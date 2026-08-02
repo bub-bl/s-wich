@@ -164,7 +164,7 @@
 
                 <!-- Navigation Controls Help Overlay -->
                 <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Padding="8,4" Background="#AA18181B" CornerRadius="4" IsHitTestVisible="False">
-                    <TextBlock Text="LMB / RMB Drag: Orbit | MMB Drag: Pan | Scroll: Zoom" FontSize="10" Foreground="#A1A1AA"/>
+                    <TextBlock Text="LMB / RMB Drag: Look | MMB Drag: Pan | Scroll: Move" FontSize="10" Foreground="#A1A1AA"/>
                 </Border>
             </Grid>
 

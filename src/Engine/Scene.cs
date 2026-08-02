@@ -15,6 +15,9 @@ public class Scene : INotifyPropertyChanged
     private float _cameraTargetX = 0f;
     private float _cameraTargetY = 0f;
     private float _cameraTargetZ = 0f;
+    private float _cameraPositionX = 4.242641f;
+    private float _cameraPositionY = 3.0f;
+    private float _cameraPositionZ = 4.242641f;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -83,6 +86,24 @@ public class Scene : INotifyPropertyChanged
         set => SetField(ref _cameraTargetZ, value);
     }
 
+    public float CameraPositionX
+    {
+        get => _cameraPositionX;
+        set => SetField(ref _cameraPositionX, value);
+    }
+
+    public float CameraPositionY
+    {
+        get => _cameraPositionY;
+        set => SetField(ref _cameraPositionY, value);
+    }
+
+    public float CameraPositionZ
+    {
+        get => _cameraPositionZ;
+        set => SetField(ref _cameraPositionZ, value);
+    }
+
     public void ResetCamera()
     {
         CameraYaw = 45f;
@@ -91,6 +112,9 @@ public class Scene : INotifyPropertyChanged
         CameraTargetX = 0f;
         CameraTargetY = 0f;
         CameraTargetZ = 0f;
+        CameraPositionX = 4.242641f;
+        CameraPositionY = 3.0f;
+        CameraPositionZ = 4.242641f;
     }
 
     protected void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

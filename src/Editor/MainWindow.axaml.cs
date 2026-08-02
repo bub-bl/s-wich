@@ -348,9 +348,7 @@ public partial class MainWindow : Window
                     Vector3 up = Vector3.UnitY;
 
                     Vector3 panOffset = (right * (float)-delta.X + up * (float)delta.Y) * sensitivity;
-                    Scene.CameraTargetX += panOffset.X;
-                    Scene.CameraTargetY += panOffset.Y;
-                    Scene.CameraTargetZ += panOffset.Z;
+                    MoveCamera(panOffset);
                 }
 
                 e.Handled = true;
@@ -374,9 +372,23 @@ public partial class MainWindow : Window
 
     private void OnViewportPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        float zoomDelta = (float)e.Delta.Y * 0.5f;
-        Scene.CameraDistance = Math.Clamp(Scene.CameraDistance - zoomDelta, 1.0f, 50.0f);
+        float yawRad = MathF.PI / 180f * Scene.CameraYaw;
+        float pitchRad = MathF.PI / 180f * Scene.CameraPitch;
+        MoveCamera(GetCameraForward(yawRad, pitchRad) * ((float)e.Delta.Y * 0.5f));
         e.Handled = true;
+    }
+
+    private static Vector3 GetCameraForward(float yawRad, float pitchRad) =>
+        Vector3.Normalize(new Vector3(
+            -MathF.Cos(pitchRad) * MathF.Sin(yawRad),
+            -MathF.Sin(pitchRad),
+            -MathF.Cos(pitchRad) * MathF.Cos(yawRad)));
+
+    private void MoveCamera(Vector3 offset)
+    {
+        Scene.CameraPositionX += offset.X;
+        Scene.CameraPositionY += offset.Y;
+        Scene.CameraPositionZ += offset.Z;
     }
 
     public void Log(string message)

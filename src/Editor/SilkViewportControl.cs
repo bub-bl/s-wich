@@ -1055,16 +1055,13 @@ public unsafe class SilkViewportControl : NativeControlHost
         // 2. Matrices & Camera Setup
         float yawRad = MathF.PI / 180f * (Scene?.CameraYaw ?? 45f);
         float pitchRad = MathF.PI / 180f * (Scene?.CameraPitch ?? 30f);
-        float dist = Scene?.CameraDistance ?? 6.0f;
-        Vector3 target = new Vector3(Scene?.CameraTargetX ?? 0f, Scene?.CameraTargetY ?? 0f, Scene?.CameraTargetZ ?? 0f);
+        Vector3 eye = new(
+            Scene?.CameraPositionX ?? 4.242641f,
+            Scene?.CameraPositionY ?? 3.0f,
+            Scene?.CameraPositionZ ?? 4.242641f);
+        Vector3 forward = GetCameraForward(yawRad, pitchRad);
 
-        Vector3 eye = target + new Vector3(
-            dist * MathF.Cos(pitchRad) * MathF.Sin(yawRad),
-            dist * MathF.Sin(pitchRad),
-            dist * MathF.Cos(pitchRad) * MathF.Cos(yawRad)
-        );
-
-        Matrix4x4 view = Matrix4x4.CreateLookAt(eye, target, Vector3.UnitY);
+        Matrix4x4 view = Matrix4x4.CreateLookAt(eye, eye + forward, Vector3.UnitY);
         Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 4f, (float)_width / _height, 0.1f, 100f);
 
         Matrix4x4.Invert(view, out Matrix4x4 viewInv);
@@ -1299,13 +1296,11 @@ public unsafe class SilkViewportControl : NativeControlHost
                 {
                     float sensitivity = Scene.CameraDistance * 0.002f;
                     float yawRad = MathF.PI / 180f * Scene.CameraYaw;
-                    Vector3 right = new Vector3(MathF.Cos(yawRad), 0, -MathF.Sin(yawRad));
+                    Vector3 right = new(MathF.Cos(yawRad), 0, -MathF.Sin(yawRad));
                     Vector3 up = Vector3.UnitY;
 
                     Vector3 panOffset = (right * (float)-delta.X + up * (float)delta.Y) * sensitivity;
-                    Scene.CameraTargetX += panOffset.X;
-                    Scene.CameraTargetY += panOffset.Y;
-                    Scene.CameraTargetZ += panOffset.Z;
+            MoveCamera(panOffset);
                 }
             }
 
@@ -1327,8 +1322,9 @@ public unsafe class SilkViewportControl : NativeControlHost
     private void HandlePointerWheelChanged(PointerWheelEventArgs e)
     {
         if (Scene == null) return;
-        float zoomDelta = (float)e.Delta.Y * 0.5f;
-        Scene.CameraDistance = Math.Clamp(Scene.CameraDistance - zoomDelta, 1.0f, 50.0f);
+        float yawRad = MathF.PI / 180f * Scene.CameraYaw;
+        float pitchRad = MathF.PI / 180f * Scene.CameraPitch;
+        MoveCamera(GetCameraForward(yawRad, pitchRad) * ((float)e.Delta.Y * 0.5f));
         e.Handled = true;
     }
 
@@ -1357,15 +1353,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         float yawRad = MathF.PI / 180f * Scene.CameraYaw;
         float pitchRad = MathF.PI / 180f * Scene.CameraPitch;
-        float distance = MathF.Max(Scene.CameraDistance, 0.001f);
-        Vector3 cameraOffset = new(
-            distance * MathF.Cos(pitchRad) * MathF.Sin(yawRad),
-            distance * MathF.Sin(pitchRad),
-            distance * MathF.Cos(pitchRad) * MathF.Cos(yawRad));
-
-        // The camera looks from eye (target + offset) toward target. Move
-        // along that exact view vector, including its vertical component.
-        Vector3 forward = Vector3.Normalize(-cameraOffset);
+        Vector3 forward = GetCameraForward(yawRad, pitchRad);
         Vector3 right = new(MathF.Cos(yawRad), 0f, -MathF.Sin(yawRad));
         Vector3 direction = forward * forwardInput + right * strafeInput;
 
@@ -1376,9 +1364,7 @@ public unsafe class SilkViewportControl : NativeControlHost
         }
 
         Vector3 offset = direction * CameraMoveSpeed * deltaTime;
-        Scene.CameraTargetX += offset.X;
-        Scene.CameraTargetY += offset.Y;
-        Scene.CameraTargetZ += offset.Z;
+        MoveCamera(offset);
     }
 
     private nint NativeWindowProc(nint hWnd, uint message, nint wParam, nint lParam)
@@ -1485,9 +1471,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             float yawRad = MathF.PI / 180f * Scene.CameraYaw;
             Vector3 right = new(MathF.Cos(yawRad), 0, -MathF.Sin(yawRad));
             Vector3 panOffset = (right * (float)-delta.X + Vector3.UnitY * (float)delta.Y) * sensitivity;
-            Scene.CameraTargetX += panOffset.X;
-            Scene.CameraTargetY += panOffset.Y;
-            Scene.CameraTargetZ += panOffset.Z;
+                    MoveCamera(panOffset);
         }
     }
 
@@ -1502,8 +1486,24 @@ public unsafe class SilkViewportControl : NativeControlHost
     {
         if (Scene != null)
         {
-            Scene.CameraDistance = Math.Clamp(Scene.CameraDistance - wheelDelta / 120f * 0.5f, 1.0f, 50.0f);
+            float yawRad = MathF.PI / 180f * Scene.CameraYaw;
+            float pitchRad = MathF.PI / 180f * Scene.CameraPitch;
+            MoveCamera(GetCameraForward(yawRad, pitchRad) * (wheelDelta / 120f * 0.5f));
         }
+    }
+
+    private static Vector3 GetCameraForward(float yawRad, float pitchRad) =>
+        Vector3.Normalize(new Vector3(
+            -MathF.Cos(pitchRad) * MathF.Sin(yawRad),
+            -MathF.Sin(pitchRad),
+            -MathF.Cos(pitchRad) * MathF.Cos(yawRad)));
+
+    private void MoveCamera(Vector3 offset)
+    {
+        if (Scene == null) return;
+        Scene.CameraPositionX += offset.X;
+        Scene.CameraPositionY += offset.Y;
+        Scene.CameraPositionZ += offset.Z;
     }
 
     private static int GetMouseX(nint lParam) => (short)((long)lParam & 0xFFFF);
