@@ -6,9 +6,11 @@ public sealed class RotateComponent : Component
 
     protected internal override void OnUpdate(float deltaTime)
     {
-        if (GameObject?.ModelRenderer?.SceneObject is not { } sceneObject)
-            return;
-        
-        sceneObject.RotationY = (sceneObject.RotationY + Speed * deltaTime) % 360f;
+        // if (GameObject?.ModelRenderer?.SceneObject is not { } sceneObject)
+        //     return;
+        //
+        // sceneObject.RotationY = (sceneObject.RotationY + Speed * deltaTime) % 360f;
+
+        WorldRotation *= Rotation.FromYaw(Speed * deltaTime % 360f);
     }
 }

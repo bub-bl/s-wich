@@ -1,4 +1,6 @@
-﻿namespace Crowbar.Engine;
+﻿using System.Numerics;
+
+namespace Crowbar.Engine;
 
 public sealed class GameObject
 {
@@ -8,6 +10,25 @@ public sealed class GameObject
     public ModelRenderer? ModelRenderer { get; private set; }
     internal Scene? Scene { get; set; }
     public bool IsValid { get; private set; } = true;
+    public Transform WorldTransform { get; set; } = Transform.Zero;
+
+    public Vector3 WorldPosition
+    {
+        get => WorldTransform.Position;
+        set => WorldTransform = WorldTransform.WithPosition(value);
+    }
+
+    public Rotation WorldRotation
+    {
+        get => WorldTransform.Rotation;
+        set => WorldTransform = WorldTransform.WithRotation(value);
+    }
+
+    public Vector3 WorldScale
+    {
+        get => WorldTransform.Scale;
+        set => WorldTransform = WorldTransform.WithScale(value);
+    }
 
     public void AddComponent(Component component)
     {
@@ -16,10 +37,17 @@ public sealed class GameObject
         if (component.GameObject is not null && !ReferenceEquals(component.GameObject, this))
             throw new InvalidOperationException("The component already belongs to another GameObject.");
 
+        Transform initialTransform = component is ModelRenderer renderer
+            ? renderer.SceneObject.WorldTransform
+            : WorldTransform;
+
         component.GameObject = this;
         _components.AddComponent(component);
         if (component is ModelRenderer modelRenderer)
+        {
             ModelRenderer = modelRenderer;
+            WorldTransform = initialTransform;
+        }
         component.OnStart();
     }
 
@@ -34,7 +62,7 @@ public sealed class GameObject
 
         if (ReferenceEquals(ModelRenderer, component))
             ModelRenderer = null;
-        component.GameObject = null;
+        component.GameObject = null!;
     }
 
     public void RemoveComponent<T>(T component) where T : Component

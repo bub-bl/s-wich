@@ -38,7 +38,7 @@ public sealed class MeshRenderPass
         if (_mode == MeshRenderPassMode.Transparent)
         {
             objects = objects.OrderByDescending(obj => Vector3.DistanceSquared(
-                new Vector3(obj.PositionX, obj.PositionY, obj.PositionZ), context.CameraPosition));
+                GetTransform(obj).Position, context.CameraPosition));
         }
 
         foreach (SceneObject obj in objects)
@@ -79,11 +79,10 @@ public sealed class MeshRenderPass
 
     private void DrawObject(MeshRenderContext context, SceneObject obj)
     {
-        Matrix4x4 model = Matrix4x4.CreateScale(obj.ScaleX, obj.ScaleY, obj.ScaleZ)
-                          * Matrix4x4.CreateRotationX(MathF.PI / 180f * obj.RotationX)
-                          * Matrix4x4.CreateRotationY(MathF.PI / 180f * obj.RotationY)
-                          * Matrix4x4.CreateRotationZ(MathF.PI / 180f * obj.RotationZ)
-                          * Matrix4x4.CreateTranslation(obj.PositionX, obj.PositionY, obj.PositionZ);
+        Transform transform = GetTransform(obj);
+        Matrix4x4 model = Matrix4x4.CreateScale(transform.Scale)
+                          * Matrix4x4.CreateFromQuaternion(transform.Rotation.Quaternion)
+                          * Matrix4x4.CreateTranslation(transform.Position);
 
         Vector4 color = context.GetColor(obj);
         ModelRenderer? modelRenderer = GetModelRenderer(obj);
@@ -148,4 +147,7 @@ public sealed class MeshRenderPass
             (ulong)(indexCount * sizeof(ushort)));
         context.Pass.DrawIndexed(indexCount);
     }
+
+    private static Transform GetTransform(SceneObject obj) =>
+        obj.Renderer?.GameObject?.WorldTransform ?? obj.WorldTransform;
 }
