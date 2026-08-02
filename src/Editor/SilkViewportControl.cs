@@ -542,9 +542,15 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         var samplerDesc = new SamplerDescriptor
         {
-            AddressModeU = AddressMode.Repeat, AddressModeV = AddressMode.Repeat, AddressModeW = AddressMode.Repeat,
-            MagFilter = FilterMode.Linear, MinFilter = FilterMode.Linear, MipmapFilter = MipmapFilterMode.Linear,
-            LodMinClamp = 0, LodMaxClamp = 32, MaxAnisotropy = 1
+            AddressModeU = AddressMode.Repeat,
+            AddressModeV = AddressMode.Repeat,
+            AddressModeW = AddressMode.Repeat,
+            MagFilter = FilterMode.Linear,
+            MinFilter = FilterMode.Linear,
+            MipmapFilter = MipmapFilterMode.Linear,
+            LodMinClamp = 0,
+            LodMaxClamp = 32,
+            MaxAnisotropy = 1
         };
         Sampler* sampler = WebGpuApi.Wgpu.DeviceCreateSampler(_device, in samplerDesc);
         gpuMesh.MaterialSampler = (nint)sampler;
@@ -553,7 +559,8 @@ public unsafe class SilkViewportControl : NativeControlHost
         {
             ModelTexture texture = textures[i] ?? new ModelTexture
             {
-                Width = 1, Height = 1,
+                Width = 1,
+                Height = 1,
                 Pixels = i == 1 ? [128, 128, 255, 255] : i == 2 ? [0, 255, 0, 255] : [255, 255, 255, 255]
             };
             GpuTextureResult gpuTexture = CreateGpuTexture(texture, i is 0 or 4);
@@ -584,7 +591,8 @@ public unsafe class SilkViewportControl : NativeControlHost
             Dimension = TextureDimension.Dimension2D,
             Size = new Extent3D { Width = (uint)source.Width, Height = (uint)source.Height, DepthOrArrayLayers = 1 },
             Format = srgb ? TextureFormat.Rgba8UnormSrgb : TextureFormat.Rgba8Unorm,
-            MipLevelCount = 1, SampleCount = 1
+            MipLevelCount = 1,
+            SampleCount = 1
         };
         Texture* texture = WebGpuApi.Wgpu.DeviceCreateTexture(_device, in textureDesc);
         var copy = new ImageCopyTexture { Texture = texture, MipLevel = 0, Aspect = TextureAspect.All };
@@ -688,14 +696,16 @@ public unsafe class SilkViewportControl : NativeControlHost
         var materialEntries = stackalloc BindGroupLayoutEntry[6];
         materialEntries[0] = new BindGroupLayoutEntry
         {
-            Binding = 0, Visibility = ShaderStage.Fragment,
+            Binding = 0,
+            Visibility = ShaderStage.Fragment,
             Sampler = new SamplerBindingLayout { Type = SamplerBindingType.Filtering }
         };
         for (int i = 0; i < 5; i++)
         {
             materialEntries[i + 1] = new BindGroupLayoutEntry
             {
-                Binding = (uint)(i + 1), Visibility = ShaderStage.Fragment,
+                Binding = (uint)(i + 1),
+                Visibility = ShaderStage.Fragment,
                 Texture = new TextureBindingLayout
                 {
                     SampleType = TextureSampleType.Float,
@@ -809,7 +819,10 @@ public unsafe class SilkViewportControl : NativeControlHost
         var pbrVsEntry = Marshal.StringToHGlobalAnsi(pbrShader.GetEntryPoint("vs_main").Name);
         var pbrFragment = new FragmentState
         {
-            Module = _pbrShaderModule, EntryPoint = (byte*)pbrFsEntry.ToPointer(), TargetCount = 1, Targets = &colorTarget
+            Module = _pbrShaderModule,
+            EntryPoint = (byte*)pbrFsEntry.ToPointer(),
+            TargetCount = 1,
+            Targets = &colorTarget
         };
         var pbrPipelineDesc = new RenderPipelineDescriptor
         {
@@ -1041,6 +1054,7 @@ public unsafe class SilkViewportControl : NativeControlHost
         _lastFrameTime = currentTime;
 
         UpdateKeyboardMovement((float)Math.Clamp(deltaTime, 0.0, 0.1));
+        Scene?.UpdateCameraPositionSmoothing((float)deltaTime);
 
         _frameCount++;
         _fpsTimer += deltaTime;
@@ -1289,8 +1303,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             {
                 if (_isOrbiting)
                 {
-                    Scene.CameraYaw -= (float)delta.X * 0.4f;
-                    Scene.CameraPitch = Math.Clamp(Scene.CameraPitch + (float)delta.Y * 0.4f, -89f, 89f);
+                    Scene.RotateCamera((float)delta.X * Scene.CameraRotationSensitivity, (float)delta.Y * Scene.CameraRotationSensitivity);
                 }
                 else if (_isPanning)
                 {
@@ -1300,7 +1313,7 @@ public unsafe class SilkViewportControl : NativeControlHost
                     Vector3 up = Vector3.UnitY;
 
                     Vector3 panOffset = (right * (float)-delta.X + up * (float)delta.Y) * sensitivity;
-            MoveCamera(panOffset);
+                    MoveCamera(panOffset);
                 }
             }
 
@@ -1462,8 +1475,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         if (_isOrbiting)
         {
-            Scene.CameraYaw -= (float)delta.X * 0.4f;
-            Scene.CameraPitch = Math.Clamp(Scene.CameraPitch + (float)delta.Y * 0.4f, -89f, 89f);
+            Scene.RotateCamera((float)delta.X * Scene.CameraRotationSensitivity, (float)delta.Y * Scene.CameraRotationSensitivity);
         }
         else if (_isPanning)
         {
@@ -1471,7 +1483,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             float yawRad = MathF.PI / 180f * Scene.CameraYaw;
             Vector3 right = new(MathF.Cos(yawRad), 0, -MathF.Sin(yawRad));
             Vector3 panOffset = (right * (float)-delta.X + Vector3.UnitY * (float)delta.Y) * sensitivity;
-                    MoveCamera(panOffset);
+            MoveCamera(panOffset);
         }
     }
 
@@ -1500,10 +1512,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void MoveCamera(Vector3 offset)
     {
-        if (Scene == null) return;
-        Scene.CameraPositionX += offset.X;
-        Scene.CameraPositionY += offset.Y;
-        Scene.CameraPositionZ += offset.Z;
+        Scene?.MoveCamera(offset);
     }
 
     private static int GetMouseX(nint lParam) => (short)((long)lParam & 0xFFFF);

@@ -337,8 +337,7 @@ public partial class MainWindow : Window
 
                 if (_isOrbiting)
                 {
-                    Scene.CameraYaw -= (float)delta.X * 0.4f;
-                    Scene.CameraPitch = Math.Clamp(Scene.CameraPitch + (float)delta.Y * 0.4f, -89f, 89f);
+                    Scene.RotateCamera((float)delta.X * Scene.CameraRotationSensitivity, (float)delta.Y * Scene.CameraRotationSensitivity);
                 }
                 else if (_isPanning)
                 {
@@ -386,9 +385,7 @@ public partial class MainWindow : Window
 
     private void MoveCamera(Vector3 offset)
     {
-        Scene.CameraPositionX += offset.X;
-        Scene.CameraPositionY += offset.Y;
-        Scene.CameraPositionZ += offset.Z;
+        Scene.MoveCamera(offset);
     }
 
     public void Log(string message)
