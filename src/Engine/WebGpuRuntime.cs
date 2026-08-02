@@ -47,7 +47,7 @@ public sealed class WebGpuRuntime : IDisposable
     internal void SetPipeline(WebGpuRenderPassEncoder pass, WebGpuRenderPipeline pipeline) =>
         WebGpuNative.SetPipeline(Api, pass, pipeline);
 
-    internal void WriteBuffer(WebGpuQueue queue, WebGpuBuffer buffer, in MeshUniforms data) =>
+    internal void WriteBuffer<T>(WebGpuQueue queue, WebGpuBuffer buffer, in T data) where T : unmanaged =>
         WebGpuNative.WriteBuffer(Api, queue, buffer, in data);
 
     internal void SetBindGroup(WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup) =>
@@ -56,9 +56,35 @@ public sealed class WebGpuRuntime : IDisposable
     internal void SetVertexBuffer(WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, ulong size) =>
         WebGpuNative.SetVertexBuffer(Api, pass, buffer, size);
 
-    internal void SetIndexBuffer(WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, IndexFormat format, ulong size) =>
+    internal void SetIndexBuffer(WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, WebGpuIndexFormat format, ulong size) =>
         WebGpuNative.SetIndexBuffer(Api, pass, buffer, format, size);
 
     internal void DrawIndexed(WebGpuRenderPassEncoder pass, uint indexCount) =>
         WebGpuNative.DrawIndexed(Api, pass, indexCount);
+
+    internal void Draw(WebGpuRenderPassEncoder pass, uint vertexCount) =>
+        WebGpuNative.Draw(Api, pass, vertexCount);
+
+    internal WebGpuRenderPassEncoder BeginRenderPass(
+        WebGpuCommandEncoder encoder,
+        RenderPassDescription description) =>
+        WebGpuNative.BeginRenderPass(Api, encoder, description);
+
+    internal void EndRenderPass(WebGpuRenderPassEncoder pass) =>
+        WebGpuNative.EndRenderPass(Api, pass);
+
+    internal WebGpuCommandBuffer FinishCommandEncoder(WebGpuCommandEncoder encoder) =>
+        WebGpuNative.FinishCommandEncoder(Api, encoder);
+
+    internal void Submit(WebGpuQueue queue, WebGpuCommandBuffer commandBuffer) =>
+        WebGpuNative.Submit(Api, queue, commandBuffer);
+
+    internal void ReleaseCommandEncoder(WebGpuCommandEncoder encoder) =>
+        WebGpuNative.ReleaseCommandEncoder(Api, encoder);
+
+    internal void ReleaseCommandBuffer(WebGpuCommandBuffer commandBuffer) =>
+        WebGpuNative.ReleaseCommandBuffer(Api, commandBuffer);
+
+    internal WebGpuCommandEncoder CreateCommandEncoder(WebGpuDevice device) =>
+        WebGpuNative.CreateCommandEncoder(Api, device);
 }

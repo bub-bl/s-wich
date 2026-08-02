@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
 
 namespace Crowbar.Engine;
@@ -46,6 +47,9 @@ public sealed class WebGpuDevice : IDisposable
             return (nint)_runtime.Api.DeviceGetQueue(UnsafeHandle);
         }
     }
+
+    public CommandList CreateCommandList() =>
+        new(_runtime, _runtime.CreateCommandEncoder(this), WebGpuQueue.FromNative(GetQueueHandle()));
 
     public void Dispose()
     {

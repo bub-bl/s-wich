@@ -924,32 +924,14 @@ public unsafe class SilkViewportControl : NativeControlHost
         if (surfaceTexture.Status != SurfaceGetCurrentTextureStatus.Success || surfaceTexture.Texture == null) return;
 
         TextureView* targetView = WebGpuApi.Wgpu.TextureCreateView(surfaceTexture.Texture, null);
-        CommandEncoder* encoder = WebGpuApi.Wgpu.DeviceCreateCommandEncoder(_device, null);
-
-        var colorAttachment = new RenderPassColorAttachment
+        using CommandList commandList = _deviceWrapper!.CreateCommandList();
+        using RenderPass renderPass = commandList.BeginRenderPass(new RenderPassDescription
         {
-            View = targetView,
-            LoadOp = LoadOp.Clear,
-            StoreOp = StoreOp.Store,
-            ClearValue = new Color { R = 0.12, G = 0.12, B = 0.14, A = 1.0 }
-        };
-
-        var depthAttachment = new RenderPassDepthStencilAttachment
-        {
-            View = _depthTextureView,
-            DepthLoadOp = LoadOp.Clear,
-            DepthStoreOp = StoreOp.Store,
+            ColorView = WebGpuTextureView.FromNative((nint)targetView),
+            DepthView = WebGpuTextureView.FromNative((nint)_depthTextureView),
+            ClearColor = new Vector4(0.12f, 0.12f, 0.14f, 1.0f),
             DepthClearValue = 1.0f
-        };
-
-        var renderPassDesc = new RenderPassDescriptor
-        {
-            ColorAttachmentCount = 1,
-            ColorAttachments = &colorAttachment,
-            DepthStencilAttachment = &depthAttachment
-        };
-
-        RenderPassEncoder* pass = WebGpuApi.Wgpu.CommandEncoderBeginRenderPass(encoder, in renderPassDesc);
+        });
 
         // Prepare the grid uniforms. The grid itself is drawn after the scene
         // so mesh depth is already available to its depth test.
@@ -963,7 +945,8 @@ public unsafe class SilkViewportControl : NativeControlHost
             ViewInv = viewInv,
             ProjInv = projInv
         };
-        WebGpuApi.Wgpu.QueueWriteBuffer(_queue, _gridUniformBuffer, 0, &gridUniforms, (nuint)sizeof(GridUniforms));
+        WebGpuApi.WriteBuffer(WebGpuQueue.FromNative((nint)_queue),
+            WebGpuBuffer.FromNative((nint)_gridUniformBuffer), in gridUniforms);
 
         // A. Draw Scene Objects
         bool wireframe = Scene?.IsWireframe == true;
@@ -990,7 +973,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             var meshContext = new MeshRenderContext
             {
                 Runtime = WebGpuApi,
-                Pass = WebGpuRenderPassEncoder.FromNative((nint)pass),
+                Pass = renderPass,
                 Queue = WebGpuQueue.FromNative((nint)_queue),
                 View = view,
                 Proj = proj,
@@ -1023,10 +1006,10 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         // B. Draw Infinite Grid. It uses depth testing without writing depth,
         // and the shader discards the space between lines.
-        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _gridPipeline);
-        WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, _gridBindGroup, 0, null);
-        WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _gridVbo, 0, (ulong)(6 * 3 * sizeof(float)));
-        WebGpuApi.Wgpu.RenderPassEncoderDraw(pass, 6, 1, 0, 0);
+        renderPass.SetPipeline(WebGpuRenderPipeline.FromNative((nint)_gridPipeline));
+        renderPass.SetBindGroup(WebGpuBindGroup.FromNative((nint)_gridBindGroup));
+        renderPass.SetVertexBuffer(WebGpuBuffer.FromNative((nint)_gridVbo), (ulong)(6 * 3 * sizeof(float)));
+        renderPass.Draw(6);
 
         // C. Draw the selection overlay after the grid.  The grid therefore
         // uses the original scene depth, while the overlay can still mask
@@ -1045,57 +1028,51 @@ public unsafe class SilkViewportControl : NativeControlHost
             WebGpuApi.WriteBuffer(WebGpuQueue.FromNative((nint)_queue), selection.Resources.UniformBuffer,
                 in outlineUniforms);
 
-            WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _selectionDepthPipeline);
-            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0,
-                (BindGroup*)selection.Resources.BindGroup.NativeHandle, 0, null);
+            renderPass.SetPipeline(WebGpuRenderPipeline.FromNative((nint)_selectionDepthPipeline));
+            renderPass.SetBindGroup(selection.Resources.BindGroup);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                MeshRenderPass.DrawModel(WebGpuApi, WebGpuRenderPassEncoder.FromNative((nint)pass),
-                    selection.Resources, wireframe: false);
+                MeshRenderPass.DrawModel(renderPass, selection.Resources, wireframe: false);
             }
             else
             {
-                DrawSelectionPrimitive(pass, selection.Object);
+                DrawSelectionPrimitive(renderPass, selection.Object);
             }
 
-            WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(pass, _outlinePipeline);
-            WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0,
-                (BindGroup*)selection.Resources.BindGroup.NativeHandle, 0, null);
+            renderPass.SetPipeline(WebGpuRenderPipeline.FromNative((nint)_outlinePipeline));
+            renderPass.SetBindGroup(selection.Resources.BindGroup);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                MeshRenderPass.DrawModel(WebGpuApi, WebGpuRenderPassEncoder.FromNative((nint)pass),
-                    selection.Resources, wireframe: false);
+                MeshRenderPass.DrawModel(renderPass, selection.Resources, wireframe: false);
             }
             else
             {
-                DrawSelectionPrimitive(pass, selection.Object);
+                DrawSelectionPrimitive(renderPass, selection.Object);
             }
         }
 
-        WebGpuApi.Wgpu.RenderPassEncoderEnd(pass);
-
-        CommandBuffer* cmdBuffer = WebGpuApi.Wgpu.CommandEncoderFinish(encoder, null);
-        WebGpuApi.Wgpu.QueueSubmit(_queue, 1, &cmdBuffer);
+        renderPass.End();
+        commandList.Submit();
         WebGpuApi.Wgpu.SurfacePresent(_surface);
 
         WebGpuApi.Wgpu.TextureViewRelease(targetView);
-        WebGpuApi.Wgpu.CommandBufferRelease(cmdBuffer);
-        WebGpuApi.Wgpu.CommandEncoderRelease(encoder);
     }
 
-    private void DrawSelectionPrimitive(RenderPassEncoder* pass, SceneObject obj)
+    private void DrawSelectionPrimitive(RenderPass pass, SceneObject obj)
     {
         if (obj.MeshType == "Pyramid")
         {
-            WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _pyramidVbo, 0, (ulong)(16 * 6 * sizeof(float)));
-            WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _pyramidEbo, IndexFormat.Uint16, 0, (ulong)(18 * sizeof(ushort)));
-            WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 18, 1, 0, 0, 0);
+            pass.SetVertexBuffer(WebGpuBuffer.FromNative((nint)_pyramidVbo), (ulong)(16 * 6 * sizeof(float)));
+            pass.SetIndexBuffer(WebGpuBuffer.FromNative((nint)_pyramidEbo), WebGpuIndexFormat.Uint16,
+                (ulong)(18 * sizeof(ushort)));
+            pass.DrawIndexed(18);
         }
         else
         {
-            WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, _cubeVbo, 0, (ulong)(24 * 6 * sizeof(float)));
-            WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, _cubeEbo, IndexFormat.Uint16, 0, (ulong)(36 * sizeof(ushort)));
-            WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+            pass.SetVertexBuffer(WebGpuBuffer.FromNative((nint)_cubeVbo), (ulong)(24 * 6 * sizeof(float)));
+            pass.SetIndexBuffer(WebGpuBuffer.FromNative((nint)_cubeEbo), WebGpuIndexFormat.Uint16,
+                (ulong)(36 * sizeof(ushort)));
+            pass.DrawIndexed(36);
         }
     }
 

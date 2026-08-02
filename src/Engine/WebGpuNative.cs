@@ -21,15 +21,15 @@ internal static unsafe class WebGpuNative
     internal static void SetPipeline(WebGPU api, WebGpuRenderPassEncoder pass, WebGpuRenderPipeline pipeline) =>
         api.RenderPassEncoderSetPipeline((RenderPassEncoder*)pass.NativeHandle, (RenderPipeline*)pipeline.NativeHandle);
 
-    internal static unsafe void WriteBuffer(
+    internal static unsafe void WriteBuffer<T>(
         WebGPU api,
         WebGpuQueue queue,
         WebGpuBuffer buffer,
-        in MeshUniforms data)
+        in T data) where T : unmanaged
     {
-        MeshUniforms copy = data;
+        T copy = data;
         api.QueueWriteBuffer((Queue*)queue.NativeHandle, (Buffer*)buffer.NativeHandle, 0, &copy,
-            (nuint)sizeof(MeshUniforms));
+            (nuint)sizeof(T));
     }
 
     internal static void SetBindGroup(WebGPU api, WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup) =>
@@ -44,11 +44,82 @@ internal static unsafe class WebGpuNative
         WebGPU api,
         WebGpuRenderPassEncoder pass,
         WebGpuBuffer buffer,
-        IndexFormat format,
+        WebGpuIndexFormat format,
         ulong size) =>
         api.RenderPassEncoderSetIndexBuffer((RenderPassEncoder*)pass.NativeHandle,
-            (Buffer*)buffer.NativeHandle, format, 0, size);
+            (Buffer*)buffer.NativeHandle,
+            format == WebGpuIndexFormat.Uint16 ? IndexFormat.Uint16 : IndexFormat.Uint32,
+            0,
+            size);
 
     internal static void DrawIndexed(WebGPU api, WebGpuRenderPassEncoder pass, uint indexCount) =>
         api.RenderPassEncoderDrawIndexed((RenderPassEncoder*)pass.NativeHandle, indexCount, 1, 0, 0, 0);
+
+    internal static void Draw(WebGPU api, WebGpuRenderPassEncoder pass, uint vertexCount) =>
+        api.RenderPassEncoderDraw((RenderPassEncoder*)pass.NativeHandle, vertexCount, 1, 0, 0);
+
+    internal static WebGpuCommandEncoder CreateCommandEncoder(WebGPU api, WebGpuDevice device) =>
+        new((nint)api.DeviceCreateCommandEncoder(device.UnsafeHandle, null));
+
+    internal static WebGpuRenderPassEncoder BeginRenderPass(
+        WebGPU api,
+        WebGpuCommandEncoder encoder,
+        RenderPassDescription description)
+    {
+        var colorAttachment = new RenderPassColorAttachment
+        {
+            View = (TextureView*)description.ColorView.NativeHandle,
+            LoadOp = LoadOp.Clear,
+            StoreOp = StoreOp.Store,
+            ClearValue = new Color
+            {
+                R = description.ClearColor.X,
+                G = description.ClearColor.Y,
+                B = description.ClearColor.Z,
+                A = description.ClearColor.W
+            }
+        };
+
+        RenderPassDepthStencilAttachment depthAttachment = default;
+        RenderPassDepthStencilAttachment* depthAttachmentPtr = null;
+        if (description.DepthView.HasValue)
+        {
+            depthAttachment = new RenderPassDepthStencilAttachment
+            {
+                View = (TextureView*)description.DepthView.Value.NativeHandle,
+                DepthLoadOp = LoadOp.Clear,
+                DepthStoreOp = StoreOp.Store,
+                DepthClearValue = description.DepthClearValue
+            };
+            depthAttachmentPtr = &depthAttachment;
+        }
+
+        var descriptor = new RenderPassDescriptor
+        {
+            ColorAttachmentCount = 1,
+            ColorAttachments = &colorAttachment,
+            DepthStencilAttachment = depthAttachmentPtr
+        };
+
+        return new((nint)api.CommandEncoderBeginRenderPass(
+            (CommandEncoder*)encoder.NativeHandle, in descriptor));
+    }
+
+    internal static void EndRenderPass(WebGPU api, WebGpuRenderPassEncoder pass) =>
+        api.RenderPassEncoderEnd((RenderPassEncoder*)pass.NativeHandle);
+
+    internal static WebGpuCommandBuffer FinishCommandEncoder(WebGPU api, WebGpuCommandEncoder encoder) =>
+        new((nint)api.CommandEncoderFinish((CommandEncoder*)encoder.NativeHandle, null));
+
+    internal static void Submit(WebGPU api, WebGpuQueue queue, WebGpuCommandBuffer commandBuffer)
+    {
+        CommandBuffer* buffer = (CommandBuffer*)commandBuffer.NativeHandle;
+        api.QueueSubmit((Queue*)queue.NativeHandle, 1, &buffer);
+    }
+
+    internal static void ReleaseCommandEncoder(WebGPU api, WebGpuCommandEncoder encoder) =>
+        api.CommandEncoderRelease((CommandEncoder*)encoder.NativeHandle);
+
+    internal static void ReleaseCommandBuffer(WebGPU api, WebGpuCommandBuffer commandBuffer) =>
+        api.CommandBufferRelease((CommandBuffer*)commandBuffer.NativeHandle);
 }

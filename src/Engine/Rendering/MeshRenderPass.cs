@@ -30,7 +30,7 @@ public sealed class MeshRenderPass
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(sceneObjects);
 
-        context.Runtime.SetPipeline(context.Pass, _pipeline);
+        context.Pass.SetPipeline(_pipeline);
 
         IEnumerable<SceneObject> objects = sceneObjects.Where(obj => ShouldRender(obj, context));
 
@@ -48,8 +48,7 @@ public sealed class MeshRenderPass
         WebGpuRenderPipeline.FromNative(nativeHandle);
 
     internal static void DrawModel(
-        WebGpuRuntime runtime,
-        WebGpuRenderPassEncoder pass,
+        RenderPass pass,
         MeshGpuResources resources,
         bool wireframe)
     {
@@ -57,9 +56,9 @@ public sealed class MeshRenderPass
         {
             WebGpuBuffer indexBuffer = wireframe ? mesh.WireframeIndexBuffer : mesh.IndexBuffer;
             uint indexCount = wireframe ? mesh.WireframeIndexCount : mesh.IndexCount;
-            runtime.SetVertexBuffer(pass, mesh.VertexBuffer, mesh.VertexBufferSize);
-            runtime.SetIndexBuffer(pass, indexBuffer, IndexFormat.Uint32, (ulong)(indexCount * sizeof(uint)));
-            runtime.DrawIndexed(pass, indexCount);
+            pass.SetVertexBuffer(mesh.VertexBuffer, mesh.VertexBufferSize);
+            pass.SetIndexBuffer(indexBuffer, WebGpuIndexFormat.Uint32, (ulong)(indexCount * sizeof(uint)));
+            pass.DrawIndexed(indexCount);
         }
     }
 
@@ -91,7 +90,7 @@ public sealed class MeshRenderPass
 
         MeshGpuResources resources = context.GetResources(obj);
         context.Runtime.WriteBuffer(context.Queue, resources.UniformBuffer, in uniforms);
-        context.Runtime.SetBindGroup(context.Pass, resources.BindGroup);
+        context.Pass.SetBindGroup(resources.BindGroup);
 
         if (obj.IsSelected && !context.Wireframe)
         {
@@ -105,7 +104,7 @@ public sealed class MeshRenderPass
 
         if (obj.Model != null && resources.ModelMeshes.Count > 0)
         {
-            DrawModel(context.Runtime, context.Pass, resources, context.Wireframe);
+            DrawModel(context.Pass, resources, context.Wireframe);
             return;
         }
 
@@ -118,10 +117,10 @@ public sealed class MeshRenderPass
             ? (context.Wireframe ? 30u : 18u)
             : (context.Wireframe ? 48u : 36u);
 
-        context.Runtime.SetVertexBuffer(context.Pass, vertexBuffer,
+        context.Pass.SetVertexBuffer(vertexBuffer,
             (ulong)((pyramid ? 16 : 24) * 6 * sizeof(float)));
-        context.Runtime.SetIndexBuffer(context.Pass, indexBuffer, IndexFormat.Uint16,
+        context.Pass.SetIndexBuffer(indexBuffer, WebGpuIndexFormat.Uint16,
             (ulong)(indexCount * sizeof(ushort)));
-        context.Runtime.DrawIndexed(context.Pass, indexCount);
+        context.Pass.DrawIndexed(indexCount);
     }
 }

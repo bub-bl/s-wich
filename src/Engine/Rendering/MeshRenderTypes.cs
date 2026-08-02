@@ -45,7 +45,7 @@ internal sealed class SelectionRenderData
 public sealed class MeshRenderContext
 {
     internal WebGpuRuntime Runtime { get; init; } = null!;
-    internal WebGpuRenderPassEncoder Pass { get; init; }
+    internal RenderPass Pass { get; init; } = null!;
     internal WebGpuQueue Queue { get; init; }
     internal Matrix4x4 View { get; init; }
     internal Matrix4x4 Proj { get; init; }
