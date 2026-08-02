@@ -44,9 +44,11 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     }
 
     let fragPos3D = in.near_point + t * (in.far_point - in.near_point);
-    let halfSize = gu.settings.x * 0.5;
-    if (abs(fragPos3D.x) > halfSize || abs(fragPos3D.z) > halfSize) {
-        discard;
+    if (gu.settings.x > 0.0) {
+        let halfSize = gu.settings.x * 0.5;
+        if (abs(fragPos3D.x) > halfSize || abs(fragPos3D.z) > halfSize) {
+            discard;
+        }
     }
     let clipSpacePos = gu.proj * gu.view * vec4<f32>(fragPos3D, 1.0);
     let realDepth = clipSpacePos.z / clipSpacePos.w;
@@ -83,7 +85,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         gridColor = gu.zAxisColor;
     }
 
-    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / gu.settings.z);
+    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / gu.settings.y);
 
     var out: FragmentOutput;
     out.color = gridColor * fading;

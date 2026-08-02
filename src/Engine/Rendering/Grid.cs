@@ -8,7 +8,8 @@ namespace Crowbar.Engine.Rendering;
 /// </summary>
 public sealed class Grid
 {
-    public float Size { get; set; } = 50f;
+    /// <summary>Optional world-space size. Null means the grid is infinite.</summary>
+    public float? Size { get; set; }
     public float CellSize { get; set; } = 1f;
     public float FadeDistance { get; set; } = 50f;
     public Vector4 LineColor { get; set; } = new(0.35f, 0.35f, 0.38f, 1f);
@@ -24,7 +25,7 @@ public sealed class Grid
         ViewInv = viewInverse,
         ProjInv = projectionInverse,
         Settings = new(
-            MathF.Max(Size, 0.01f),
+            Size.HasValue ? MathF.Max(Size.Value, 0.01f) : 0f,
             MathF.Max(CellSize, 0.001f),
             MathF.Max(FadeDistance, 0.01f),
             ShowAxes ? 1f : 0f),
