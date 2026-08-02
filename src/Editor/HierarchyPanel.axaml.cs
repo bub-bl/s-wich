@@ -49,13 +49,13 @@ public partial class HierarchyPanel : UserControl
         
         if (change.OldValue is Scene oldScene)
         {
-            oldScene.Objects.CollectionChanged -= OnObjectsChanged;
+            oldScene.GameObjects.CollectionChanged -= OnObjectsChanged;
             oldScene.PropertyChanged -= OnScenePropertyChanged;
         }
 
         if (change.NewValue is Scene newScene)
         {
-            newScene.Objects.CollectionChanged += OnObjectsChanged;
+            newScene.GameObjects.CollectionChanged += OnObjectsChanged;
             newScene.PropertyChanged += OnScenePropertyChanged;
         }
 
@@ -94,7 +94,7 @@ public partial class HierarchyPanel : UserControl
         renderNode.Children.Add(new HierarchyNode("Main Camera", "◈", "Camera"));
         renderNode.Children.Add(new HierarchyNode("Sky", "☼", "Environment"));
 
-        foreach (var sceneObject in Scene.Objects)
+        foreach (var sceneObject in Scene.GameObjects)
         {
             var icon = sceneObject.MeshType == "Pyramid" ? "◆" : "■";
             var objectNode = new HierarchyNode(sceneObject.Name, icon, sceneObject.MeshType, sceneObject);

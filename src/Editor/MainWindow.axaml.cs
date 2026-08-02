@@ -86,9 +86,9 @@ public partial class MainWindow : Window
             MeshType = "Pyramid"
         };
 
-        Scene.Objects.Add(cube1);
-        Scene.Objects.Add(cube2);
-        Scene.Objects.Add(pyramid);
+        Scene.GameObjects.Add(cube1);
+        Scene.GameObjects.Add(cube2);
+        Scene.GameObjects.Add(pyramid);
 
         const string modelPath = "Assets/scene.gltf";
         if (File.Exists(modelPath) || File.Exists(Path.Combine(AppContext.BaseDirectory, modelPath)))
@@ -110,7 +110,7 @@ public partial class MainWindow : Window
                     ColorB = 0.35f,
                     MeshType = "Model"
                 };
-                Scene.Objects.Add(modelObject);
+                Scene.GameObjects.Add(modelObject);
                 Log($"Loaded model: {modelPath}");
             }
             catch (Exception exception) when (exception is IOException or FormatException or DllNotFoundException or EntryPointNotFoundException)
@@ -124,7 +124,7 @@ public partial class MainWindow : Window
 
     private void OnAddCubeClick(object? sender, RoutedEventArgs e)
     {
-        int count = Scene.Objects.Count + 1;
+        int count = Scene.GameObjects.Count + 1;
         var obj = new SceneObject
         {
             Name = $"Cube_{count}",
@@ -136,14 +136,14 @@ public partial class MainWindow : Window
             ColorB = (float)Random.Shared.NextDouble(),
             MeshType = "Cube"
         };
-        Scene.Objects.Add(obj);
+        Scene.GameObjects.Add(obj);
         Scene.SelectedObject = obj;
         Log($"Created new Scene Object: '{obj.Name}'");
     }
 
     private void OnAddPyramidClick(object? sender, RoutedEventArgs e)
     {
-        int count = Scene.Objects.Count + 1;
+        int count = Scene.GameObjects.Count + 1;
         var obj = new SceneObject
         {
             Name = $"Pyramid_{count}",
@@ -155,7 +155,7 @@ public partial class MainWindow : Window
             ColorB = (float)Random.Shared.NextDouble(),
             MeshType = "Pyramid"
         };
-        Scene.Objects.Add(obj);
+        Scene.GameObjects.Add(obj);
         Scene.SelectedObject = obj;
         Log($"Created new Scene Object: '{obj.Name}'");
     }
@@ -165,8 +165,8 @@ public partial class MainWindow : Window
         if (Scene.SelectedObject != null)
         {
             string name = Scene.SelectedObject.Name;
-            Scene.Objects.Remove(Scene.SelectedObject);
-            Scene.SelectedObject = Scene.Objects.Count > 0 ? Scene.Objects[0] : null;
+            Scene.GameObjects.Remove(Scene.SelectedObject);
+            Scene.SelectedObject = Scene.GameObjects.Count > 0 ? Scene.GameObjects[0] : null;
             Log($"Removed Scene Object: '{name}'");
         }
     }
@@ -190,7 +190,7 @@ public partial class MainWindow : Window
 
     private void OnNewSceneClick(object? sender, RoutedEventArgs e)
     {
-        Scene.Objects.Clear();
+        Scene.GameObjects.Clear();
         InitDefaultScene();
         Log("New scene loaded.");
     }

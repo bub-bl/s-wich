@@ -603,7 +603,7 @@ public unsafe class SilkViewportControl : NativeControlHost
         List<SceneObject>? removed = null;
         foreach (SceneObject obj in _meshResources.Keys)
         {
-            if (!Scene.Objects.Contains(obj))
+            if (!Scene.GameObjects.Contains(obj))
             {
                 (removed ??= new List<SceneObject>()).Add(obj);
             }
@@ -1118,7 +1118,7 @@ public unsafe class SilkViewportControl : NativeControlHost
         {
             CleanupMeshResources();
 
-            var visibleObjects = Scene.Objects
+            var visibleObjects = Scene.GameObjects
                 .Where(obj => obj.IsVisible)
                 .ToList();
 

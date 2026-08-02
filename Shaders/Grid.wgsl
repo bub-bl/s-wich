@@ -85,7 +85,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         gridColor = gu.zAxisColor;
     }
 
-    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / gu.settings.y);
+    let fading = max(0.0, 1.0 - length(fragPos3D.xz) / gu.settings.z);
 
     var out: FragmentOutput;
     out.color = gridColor * fading;

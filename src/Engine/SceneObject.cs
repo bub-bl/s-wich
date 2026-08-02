@@ -5,129 +5,112 @@ namespace Crowbar.Engine;
 
 public class SceneObject : INotifyPropertyChanged
 {
-    private string _name = "GameObject";
-    private float _positionX;
-    private float _positionY;
-    private float _positionZ;
-    private float _rotationX;
-    private float _rotationY;
-    private float _rotationZ;
-    private float _scaleX = 1f;
-    private float _scaleY = 1f;
-    private float _scaleZ = 1f;
-    private float _colorR = 0.2f;
-    private float _colorG = 0.6f;
-    private float _colorB = 1.0f;
-    private float _colorA = 1.0f;
-    private bool _isVisible = true;
-    private bool _isSelected;
-    private string _meshType = "Cube";
-    private Model? _model;
-    private Material? _material;
-
+    public bool RenderingEnabled { get; set; } = true;
+    public Transform Transform { get; set; } = new();
+    
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Name
     {
-        get => _name;
-        set => SetField(ref _name, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = "GameObject";
 
     public float PositionX
     {
-        get => _positionX;
-        set => SetField(ref _positionX, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float PositionY
     {
-        get => _positionY;
-        set => SetField(ref _positionY, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float PositionZ
     {
-        get => _positionZ;
-        set => SetField(ref _positionZ, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float RotationX
     {
-        get => _rotationX;
-        set => SetField(ref _rotationX, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float RotationY
     {
-        get => _rotationY;
-        set => SetField(ref _rotationY, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float RotationZ
     {
-        get => _rotationZ;
-        set => SetField(ref _rotationZ, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float ScaleX
     {
-        get => _scaleX;
-        set => SetField(ref _scaleX, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 1f;
 
     public float ScaleY
     {
-        get => _scaleY;
-        set => SetField(ref _scaleY, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 1f;
 
     public float ScaleZ
     {
-        get => _scaleZ;
-        set => SetField(ref _scaleZ, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 1f;
 
     public float ColorR
     {
-        get => _colorR;
-        set => SetField(ref _colorR, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 0.2f;
 
     public float ColorG
     {
-        get => _colorG;
-        set => SetField(ref _colorG, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 0.6f;
 
     public float ColorB
     {
-        get => _colorB;
-        set => SetField(ref _colorB, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 1.0f;
 
     public float ColorA
     {
-        get => _colorA;
-        set => SetField(ref _colorA, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 1.0f;
 
     public bool IsVisible
     {
-        get => _isVisible;
-        set => SetField(ref _isVisible, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = true;
 
     public bool IsSelected
     {
-        get => _isSelected;
-        set => SetField(ref _isSelected, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public string MeshType
     {
-        get => _meshType;
-        set => SetField(ref _meshType, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = "Cube";
 
     /// <summary>
     /// Optional imported model. When set, the renderer uses it instead of the
@@ -135,22 +118,21 @@ public class SceneObject : INotifyPropertyChanged
     /// </summary>
     public Model? Model
     {
-        get => _model;
-        set => SetField(ref _model, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public Material? Material
     {
-        get => _material;
-        set => SetField(ref _material, value);
+        get;
+        set => SetField(ref field, value);
     }
 
-    protected void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
-        if (!Equals(field, value))
-        {
-            field = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
+        if (Equals(field, value)) return;
+        field = value;
+
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

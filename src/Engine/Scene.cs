@@ -2,27 +2,19 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Crowbar.Engine.Rendering;
 
 namespace Crowbar.Engine;
 
-public class Scene : INotifyPropertyChanged
+public class Scene : IValid, INotifyPropertyChanged
 {
     // Mouse rotation sensitivity, in degrees per pixel.
     public const float CameraRotationSensitivity = 0.1f;
-    private const float CameraPositionSmoothing = 18f;
-    private const float CameraRotationSmoothing = 60f;
-    private SceneObject? _selectedObject;
-    private bool _isWireframe;
-    private bool _isPaused;
+    private const float CAMERA_POSITION_SMOOTHING = 18f;
+    private const float CAMERA_ROTATION_SMOOTHING = 60f;
     private float _cameraYaw = 45f;
     private float _cameraPitch = 30f;
     private float _cameraYawTarget = 45f;
     private float _cameraPitchTarget = 30f;
-    private float _cameraDistance = 6.0f;
-    private float _cameraTargetX = 0f;
-    private float _cameraTargetY = 0f;
-    private float _cameraTargetZ = 0f;
     private float _cameraPositionX = 4.242641f;
     private float _cameraPositionY = 3.0f;
     private float _cameraPositionZ = 4.242641f;
@@ -31,34 +23,38 @@ public class Scene : INotifyPropertyChanged
     private float _cameraPositionTargetZ = 4.242641f;
 
     public event PropertyChangedEventHandler? PropertyChanged;
-
-    public ObservableCollection<SceneObject> Objects { get; } = new();
+    
+    public SceneFileMetadata? Metadata { get; internal init; }
+    public ObservableCollection<GameObject> GameObjects { get; } = [];
+    public bool IsValid => Current == this;
+    
+    public static Scene? Current { get; private set; }
 
     public SceneObject? SelectedObject
     {
-        get => _selectedObject;
+        get;
         set
         {
-            if (_selectedObject != value)
-            {
-                if (_selectedObject != null) _selectedObject.IsSelected = false;
-                _selectedObject = value;
-                if (_selectedObject != null) _selectedObject.IsSelected = true;
-                OnPropertyChanged();
-            }
+            if (field == value) return;
+            
+            field?.IsSelected = false;
+            field = value;
+            field?.IsSelected = true;
+                
+            OnPropertyChanged();
         }
     }
 
     public bool IsWireframe
     {
-        get => _isWireframe;
-        set => SetField(ref _isWireframe, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public bool IsPaused
     {
-        get => _isPaused;
-        set => SetField(ref _isPaused, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float CameraYaw
@@ -83,26 +79,26 @@ public class Scene : INotifyPropertyChanged
 
     public float CameraDistance
     {
-        get => _cameraDistance;
-        set => SetField(ref _cameraDistance, value);
-    }
+        get;
+        set => SetField(ref field, value);
+    } = 6.0f;
 
     public float CameraTargetX
     {
-        get => _cameraTargetX;
-        set => SetField(ref _cameraTargetX, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float CameraTargetY
     {
-        get => _cameraTargetY;
-        set => SetField(ref _cameraTargetY, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float CameraTargetZ
     {
-        get => _cameraTargetZ;
-        set => SetField(ref _cameraTargetZ, value);
+        get;
+        set => SetField(ref field, value);
     }
 
     public float CameraPositionX
@@ -134,6 +130,27 @@ public class Scene : INotifyPropertyChanged
             _cameraPositionTargetZ = value;
         }
     }
+    
+    public IDisposable Push()
+    {
+        var previous = Current;
+        Current = this;
+
+        return new DisposableAction(() =>
+        {
+            Current = previous;
+        });
+    }
+    
+    internal void AddGameObject(GameObject gameObject)
+    {
+        GameObjects.Add(gameObject);
+    }
+
+    internal bool RemoveGameObject(GameObject gameObject)
+    {
+        return GameObjects.Remove(gameObject);
+    }
 
     public void ResetCamera()
     {
@@ -163,29 +180,28 @@ public class Scene : INotifyPropertyChanged
 
     public void UpdateCameraPositionSmoothing(float deltaTime)
     {
-        float clampedDeltaTime = Math.Clamp(deltaTime, 0f, 0.1f);
-        float positionSmoothing = 1f - MathF.Exp(-CameraPositionSmoothing * clampedDeltaTime);
-        _cameraPositionX = Lerp(_cameraPositionX, _cameraPositionTargetX, positionSmoothing);
-        _cameraPositionY = Lerp(_cameraPositionY, _cameraPositionTargetY, positionSmoothing);
-        _cameraPositionZ = Lerp(_cameraPositionZ, _cameraPositionTargetZ, positionSmoothing);
+        var clampedDeltaTime = Math.Clamp(deltaTime, 0f, 0.1f);
+        var positionSmoothing = 1f - MathF.Exp(-CAMERA_POSITION_SMOOTHING * clampedDeltaTime);
+        
+        _cameraPositionX = float.Lerp(_cameraPositionX, _cameraPositionTargetX, positionSmoothing);
+        _cameraPositionY = float.Lerp(_cameraPositionY, _cameraPositionTargetY, positionSmoothing);
+        _cameraPositionZ = float.Lerp(_cameraPositionZ, _cameraPositionTargetZ, positionSmoothing);
 
-        float rotationSmoothing = 1f - MathF.Exp(-CameraRotationSmoothing * clampedDeltaTime);
-        _cameraYaw = Lerp(_cameraYaw, _cameraYawTarget, rotationSmoothing);
-        _cameraPitch = Lerp(_cameraPitch, _cameraPitchTarget, rotationSmoothing);
+        var rotationSmoothing = 1f - MathF.Exp(-CAMERA_ROTATION_SMOOTHING * clampedDeltaTime);
+        
+        _cameraYaw = float.Lerp(_cameraYaw, _cameraYawTarget, rotationSmoothing);
+        _cameraPitch = float.Lerp(_cameraPitch, _cameraPitchTarget, rotationSmoothing);
     }
 
-    private static float Lerp(float from, float to, float amount) => from + (to - from) * amount;
-
-    protected void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
-        if (!Equals(field, value))
-        {
-            field = value;
-            OnPropertyChanged(propertyName);
-        }
+        if (Equals(field, value)) return;
+        field = value;
+        
+        OnPropertyChanged(propertyName);
     }
 
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
