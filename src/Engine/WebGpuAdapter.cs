@@ -3,24 +3,32 @@ using Silk.NET.WebGPU;
 
 namespace Crowbar.Engine;
 
-public sealed unsafe class WebGpuAdapter : IDisposable
+public sealed class WebGpuAdapter : IDisposable
 {
-    private Adapter* _adapter;
+    private readonly WebGpuRuntime _runtime;
+    private nint _nativeHandle;
 
-    public WebGpuAdapter(WebGpuInstance instance, Surface* surface)
+    public WebGpuAdapter(WebGpuRuntime runtime, nint surfaceHandle)
     {
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        if (surfaceHandle == 0) throw new ArgumentException("A surface handle is required.", nameof(surfaceHandle));
+
         var adapterOptions = new RequestAdapterOptions
         {
-            CompatibleSurface = surface,
             BackendType = BackendType.Undefined, // Autodetect best backend (Vulkan / D3D12 / Metal)
             PowerPreference = PowerPreference.HighPerformance
         };
+
+        unsafe
+        {
+            adapterOptions.CompatibleSurface = (Surface*)surfaceHandle;
+        }
 
         var callback = PfnRequestAdapterCallback.From((status, adapter, msgPtr, userDataPtr) =>
         {
             if (status is RequestAdapterStatus.Success)
             {
-                _adapter = adapter;
+                _nativeHandle = (nint)adapter;
                 Console.WriteLine("Retrieved WebGPU adapter.");
                 return;
             }
@@ -29,25 +37,27 @@ public sealed unsafe class WebGpuAdapter : IDisposable
             Console.WriteLine($"Failed to create WebGPU adapter: {message}");
         });
 
-        WebGpuApi.Wgpu.InstanceRequestAdapter(instance, in adapterOptions, callback, null);
+        unsafe
+        {
+            _runtime.Api.InstanceRequestAdapter(_runtime.Instance.UnsafeHandle, in adapterOptions, callback, null);
+        }
         Console.WriteLine("Created WebGPU adapter.");
     }
 
     public WebGpuDevice CreateDevice()
     {
-        return new WebGpuDevice(this);
+        return new WebGpuDevice(_runtime, this);
     }
 
-    public static implicit operator Adapter*(WebGpuAdapter adapter)
-    {
-        return adapter._adapter;
-    }
+    internal nint NativeHandle => _nativeHandle;
+    internal unsafe Adapter* UnsafeHandle => (Adapter*)_nativeHandle;
 
     public void Dispose()
     {
-        if (_adapter != null)
+        if (_nativeHandle != 0)
         {
-            WebGpuApi.Wgpu.AdapterRelease(_adapter);
+            WebGpuNative.ReleaseAdapter(_runtime.Api, _nativeHandle);
+            _nativeHandle = 0;
         }
     }
 }

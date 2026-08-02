@@ -1,7 +1,10 @@
 using Crowbar.Engine;
 
-namespace Crowbar.Editor.Rendering;
+namespace Crowbar.Engine.Rendering;
 
+/// <summary>
+/// Safe public API for rendering mesh scene objects.
+/// </summary>
 public abstract class MeshRenderPass
 {
     private readonly UnsafeMeshRenderPass _implementation;
@@ -13,6 +16,8 @@ public abstract class MeshRenderPass
 
     public void Execute(MeshRenderContext context, IEnumerable<SceneObject> sceneObjects)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(sceneObjects);
         _implementation.Execute(context.UnsafeContext, sceneObjects);
     }
 }

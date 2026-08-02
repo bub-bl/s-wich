@@ -3,19 +3,22 @@ using Silk.NET.WebGPU;
 
 namespace Crowbar.Engine;
 
-public sealed unsafe class WebGpuDevice : IDisposable
+public sealed class WebGpuDevice : IDisposable
 {
-    private Device* _device;
+    private readonly WebGpuRuntime _runtime;
+    private nint _nativeHandle;
 
-    public WebGpuDevice(WebGpuAdapter adapter)
+    internal WebGpuDevice(WebGpuRuntime runtime, WebGpuAdapter adapter)
     {
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        ArgumentNullException.ThrowIfNull(adapter);
         var deviceOptions = new DeviceDescriptor();
 
         var callback = PfnRequestDeviceCallback.From((status, device, msgPtr, _) =>
         {
             if (status is RequestDeviceStatus.Success)
             {
-                _device = device;
+                _nativeHandle = (nint)device;
                 Console.WriteLine("Retrieved WebGPU device.");
             }
             else
@@ -25,24 +28,31 @@ public sealed unsafe class WebGpuDevice : IDisposable
             }
         });
 
-        WebGpuApi.Wgpu.AdapterRequestDevice(adapter, in deviceOptions, callback, null);
+        unsafe
+        {
+            _runtime.Api.AdapterRequestDevice(adapter.UnsafeHandle, in deviceOptions, callback, null);
+        }
     }
 
-    public Queue* GetQueue()
-    {
-        return WebGpuApi.Wgpu.DeviceGetQueue(_device);
-    }
+    internal nint NativeHandle => _nativeHandle;
+    internal unsafe Device* UnsafeHandle => (Device*)_nativeHandle;
 
-    public static implicit operator Device*(WebGpuDevice device)
+    internal unsafe Queue* GetQueue() => (Queue*)GetQueueHandle();
+
+    public nint GetQueueHandle()
     {
-        return device._device;
+        unsafe
+        {
+            return (nint)_runtime.Api.DeviceGetQueue(UnsafeHandle);
+        }
     }
 
     public void Dispose()
     {
-        if (_device != null)
+        if (_nativeHandle != 0)
         {
-            WebGpuApi.Wgpu.DeviceRelease(_device);
+            WebGpuNative.ReleaseDevice(_runtime.Api, _nativeHandle);
+            _nativeHandle = 0;
         }
     }
 }

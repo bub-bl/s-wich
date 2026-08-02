@@ -1,9 +1,8 @@
 using System.Numerics;
-using Crowbar.Engine;
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 
-namespace Crowbar.Editor.Rendering;
+namespace Crowbar.Engine.Rendering;
 
 internal unsafe abstract class UnsafeMeshRenderPass
 {
@@ -12,7 +11,7 @@ internal unsafe abstract class UnsafeMeshRenderPass
     public void Execute(UnsafeMeshRenderContext context, IEnumerable<SceneObject> sceneObjects)
     {
         context.Pipeline = Pipeline;
-        WebGpuApi.Wgpu.RenderPassEncoderSetPipeline(context.Pass, Pipeline);
+        context.Runtime.Api.RenderPassEncoderSetPipeline(context.Pass, Pipeline);
 
         IEnumerable<SceneObject> objects = sceneObjects.Where(obj => ShouldRender(obj, context));
         objects = OrderObjects(objects, context);
@@ -46,9 +45,9 @@ internal unsafe abstract class UnsafeMeshRenderPass
         };
 
         MeshGpuResources resources = context.GetResources(obj);
-        WebGpuApi.Wgpu.QueueWriteBuffer(context.Queue, resources.UniformBuffer, 0, &uniforms,
+        context.Runtime.Api.QueueWriteBuffer(context.Queue, resources.UniformBuffer, 0, &uniforms,
             (nuint)sizeof(MeshUniforms));
-        WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(context.Pass, 0, resources.BindGroup, 0, null);
+        context.Runtime.Api.RenderPassEncoderSetBindGroup(context.Pass, 0, resources.BindGroup, 0, null);
 
         if (obj.IsSelected && !context.Wireframe)
         {
@@ -62,7 +61,7 @@ internal unsafe abstract class UnsafeMeshRenderPass
 
         if (obj.Model != null && resources.ModelMeshes.Count > 0)
         {
-            DrawModel(context.Pass, resources, context.Wireframe);
+            DrawModel(context.Runtime, context.Pass, resources, context.Wireframe);
             return;
         }
 
@@ -75,24 +74,24 @@ internal unsafe abstract class UnsafeMeshRenderPass
             ? (context.Wireframe ? 30u : 18u)
             : (context.Wireframe ? 48u : 36u);
 
-        WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(context.Pass, 0, vertexBuffer, 0,
+        context.Runtime.Api.RenderPassEncoderSetVertexBuffer(context.Pass, 0, vertexBuffer, 0,
             (ulong)((pyramid ? 16 : 24) * 6 * sizeof(float)));
-        WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(context.Pass, indexBuffer, IndexFormat.Uint16, 0,
+        context.Runtime.Api.RenderPassEncoderSetIndexBuffer(context.Pass, indexBuffer, IndexFormat.Uint16, 0,
             (ulong)(indexCount * sizeof(ushort)));
-        WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(context.Pass, indexCount, 1, 0, 0, 0);
+        context.Runtime.Api.RenderPassEncoderDrawIndexed(context.Pass, indexCount, 1, 0, 0, 0);
     }
 
-    internal static void DrawModel(RenderPassEncoder* pass, MeshGpuResources resources, bool wireframe)
+    internal static void DrawModel(WebGpuRuntime runtime, RenderPassEncoder* pass, MeshGpuResources resources, bool wireframe)
     {
         foreach (ModelGpuMesh mesh in resources.ModelMeshes)
         {
             Buffer* indexBuffer = wireframe ? mesh.WireframeIndexBuffer : mesh.IndexBuffer;
             uint indexCount = wireframe ? mesh.WireframeIndexCount : mesh.IndexCount;
-            WebGpuApi.Wgpu.RenderPassEncoderSetVertexBuffer(pass, 0, mesh.VertexBuffer, 0,
+            runtime.Api.RenderPassEncoderSetVertexBuffer(pass, 0, mesh.VertexBuffer, 0,
                 mesh.VertexBufferSize);
-            WebGpuApi.Wgpu.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint32, 0,
+            runtime.Api.RenderPassEncoderSetIndexBuffer(pass, indexBuffer, IndexFormat.Uint32, 0,
                 (ulong)(indexCount * sizeof(uint)));
-            WebGpuApi.Wgpu.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
+            runtime.Api.RenderPassEncoderDrawIndexed(pass, indexCount, 1, 0, 0, 0);
         }
     }
 

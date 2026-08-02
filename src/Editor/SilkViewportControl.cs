@@ -8,7 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Crowbar.Engine;
-using Crowbar.Editor.Rendering;
+using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 using Color = Silk.NET.WebGPU.Color;
@@ -21,9 +21,14 @@ public unsafe class SilkViewportControl : NativeControlHost
     private nint _previousWndProc;
     private NativeWndProc? _nativeWndProc;
     private Surface* _surface;
-    private WebGpuAdapter? _adapter;
-    private WebGpuDevice? _device;
+    private WebGpuAdapter? _adapterWrapper;
+    private WebGpuDevice? _deviceWrapper;
+    private WebGpuRuntime? _gpu;
+    private Adapter* _adapter;
+    private Device* _device;
     private Queue* _queue;
+
+    private WebGpuRuntime WebGpuApi => _gpu ?? throw new InvalidOperationException("WebGPU is not initialized.");
 
     private TextureFormat _swapChainFormat = TextureFormat.Bgra8Unorm;
     private Texture* _depthTexture;
@@ -214,7 +219,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
     private void InitWebGpu()
     {
-        WebGpuApi.Initialize();
+        _gpu = new WebGpuRuntime();
 
         var hwndDesc = new SurfaceDescriptorFromWindowsHWND
         {
@@ -228,12 +233,14 @@ public unsafe class SilkViewportControl : NativeControlHost
             NextInChain = (ChainedStruct*)&hwndDesc
         };
 
-        _surface = WebGpuApi.Wgpu.InstanceCreateSurface(WebGpuApi.Instance, in surfaceDesc);
-        _adapter = new WebGpuAdapter(WebGpuApi.Instance, _surface);
-        _device = _adapter.CreateDevice();
-        _queue = _device.GetQueue();
+        _surface = WebGpuApi.Wgpu.InstanceCreateSurface(WebGpuApi.Instance.UnsafeHandle, in surfaceDesc);
+        _adapterWrapper = new WebGpuAdapter(WebGpuApi, (nint)_surface);
+        _adapter = _adapterWrapper.UnsafeHandle;
+        _deviceWrapper = _adapterWrapper.CreateDevice();
+        _device = _deviceWrapper.UnsafeHandle;
+        _queue = _deviceWrapper.GetQueue();
 
-        WebGpuApi.ConfigureDebugCallback(_device);
+        WebGpuApi.ConfigureDebugCallback(_deviceWrapper);
 
         GpuVendor = "WebGPU (WGPU / Native)";
         GpuRenderer = "Hardware Accelerated (Vulkan / D3D12)";
@@ -981,6 +988,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
             var meshContext = new MeshRenderContext(new UnsafeMeshRenderContext
             {
+                Runtime = WebGpuApi,
                 Pass = pass,
                 Queue = _queue,
                 View = view,
@@ -1039,7 +1047,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                UnsafeMeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
+                UnsafeMeshRenderPass.DrawModel(WebGpuApi, pass, selection.Resources, wireframe: false);
             }
             else
             {
@@ -1050,7 +1058,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                UnsafeMeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
+                UnsafeMeshRenderPass.DrawModel(WebGpuApi, pass, selection.Resources, wireframe: false);
             }
             else
             {
@@ -1393,8 +1401,8 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         if (_surface != null) WebGpuApi.Wgpu.SurfaceRelease(_surface);
 
-        _device?.Dispose();
-        _adapter?.Dispose();
+        _deviceWrapper?.Dispose();
+        _adapterWrapper?.Dispose();
         WebGpuApi.Dispose();
     }
 

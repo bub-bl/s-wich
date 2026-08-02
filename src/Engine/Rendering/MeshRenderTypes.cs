@@ -1,10 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Crowbar.Engine;
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 
-namespace Crowbar.Editor.Rendering;
+namespace Crowbar.Engine.Rendering;
 
 [StructLayout(LayoutKind.Sequential)]
 internal struct MeshUniforms
@@ -59,6 +58,7 @@ public sealed class MeshRenderContext
 
 internal unsafe sealed class UnsafeMeshRenderContext
 {
+    public required WebGpuRuntime Runtime;
     public RenderPassEncoder* Pass;
     public Queue* Queue;
     public Matrix4x4 View;
