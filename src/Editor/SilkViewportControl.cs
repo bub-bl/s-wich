@@ -39,9 +39,9 @@ public unsafe class SilkViewportControl : NativeControlHost
     private RenderPipeline* _selectionDepthPipeline;
     private RenderPipeline* _outlinePipeline;
     private RenderPipeline* _gridPipeline;
-    private OpaqueMeshPass? _opaqueMeshPass;
-    private TransparentMeshPass? _transparentMeshPass;
-    private WireframeMeshPass? _wireframeMeshPass;
+    private MeshRenderPass? _opaqueMeshPass;
+    private MeshRenderPass? _transparentMeshPass;
+    private MeshRenderPass? _wireframeMeshPass;
 
     private Buffer* _cubeVbo;
     private Buffer* _cubeEbo;
@@ -710,9 +710,12 @@ public unsafe class SilkViewportControl : NativeControlHost
         outlineDepthStencilState.DepthCompare = CompareFunction.LessEqual;
         wireframePipelineDesc.DepthStencil = &outlineDepthStencilState;
         _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
-        _opaqueMeshPass = new OpaqueMeshPass(_meshPipeline);
-        _transparentMeshPass = new TransparentMeshPass(_transparentMeshPipeline);
-        _wireframeMeshPass = new WireframeMeshPass(_wireframePipeline);
+        MeshRenderPipeline meshPipeline = UnsafeMeshRenderPass.CreatePipeline(_meshPipeline);
+        MeshRenderPipeline transparentMeshPipeline = UnsafeMeshRenderPass.CreatePipeline(_transparentMeshPipeline);
+        MeshRenderPipeline wireframePipeline = UnsafeMeshRenderPass.CreatePipeline(_wireframePipeline);
+        _opaqueMeshPass = new OpaqueMeshRenderPass(meshPipeline);
+        _transparentMeshPass = new TransparentMeshRenderPass(transparentMeshPipeline);
+        _wireframeMeshPass = new WireframeMeshRenderPass(wireframePipeline);
 
         var outlineFragmentState = fragmentState;
         var outlineFsEntryPoint = Marshal.StringToHGlobalAnsi(meshShader.GetEntryPoint("fs_outline").Name);
@@ -976,7 +979,7 @@ public unsafe class SilkViewportControl : NativeControlHost
                 }
             }
 
-            var meshContext = new MeshRenderContext
+            var meshContext = new MeshRenderContext(new UnsafeMeshRenderContext
             {
                 Pass = pass,
                 Queue = _queue,
@@ -994,7 +997,7 @@ public unsafe class SilkViewportControl : NativeControlHost
                 GetColor = GetMaterialColor,
                 GetLightDirection = GetMaterialLightDirection,
                 Wireframe = wireframe
-            };
+            });
 
             if (wireframe)
             {
@@ -1036,7 +1039,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                MeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
+                UnsafeMeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
             }
             else
             {
@@ -1047,7 +1050,7 @@ public unsafe class SilkViewportControl : NativeControlHost
             WebGpuApi.Wgpu.RenderPassEncoderSetBindGroup(pass, 0, selection.Resources.BindGroup, 0, null);
             if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
             {
-                MeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
+                UnsafeMeshRenderPass.DrawModel(pass, selection.Resources, wireframe: false);
             }
             else
             {

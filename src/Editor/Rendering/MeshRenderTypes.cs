@@ -41,7 +41,23 @@ internal sealed class SelectionRenderData
     public MeshGpuResources Resources { get; init; } = null!;
 }
 
-internal unsafe sealed class MeshRenderContext
+public sealed class MeshRenderContext
+{
+    internal UnsafeMeshRenderContext UnsafeContext { get; }
+
+    internal MeshRenderContext(UnsafeMeshRenderContext unsafeContext)
+    {
+        UnsafeContext = unsafeContext;
+    }
+
+    internal SelectionRenderData? Selection
+    {
+        get => UnsafeContext.Selection;
+        set => UnsafeContext.Selection = value;
+    }
+}
+
+internal unsafe sealed class UnsafeMeshRenderContext
 {
     public RenderPassEncoder* Pass;
     public Queue* Queue;
