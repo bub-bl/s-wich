@@ -33,16 +33,22 @@ public sealed class MeshRenderPass
 
         context.Pass.SetPipeline(_pipeline);
 
-        IEnumerable<SceneObject> objects = sceneObjects.Where(obj => ShouldRender(obj, context));
-
         if (_mode == MeshRenderPassMode.Transparent)
         {
-            objects = objects.OrderByDescending(obj => Vector3.DistanceSquared(
-                new Vector3(obj.PositionX, obj.PositionY, obj.PositionZ), context.CameraPosition));
+            var objects = sceneObjects
+                .Where(obj => ShouldRender(obj, context))
+                .OrderByDescending(obj => Vector3.DistanceSquared(obj.Transform.Position, context.CameraPosition));
+
+            foreach (SceneObject obj in objects)
+                DrawObject(context, obj);
+            return;
         }
 
-        foreach (SceneObject obj in objects)
-            DrawObject(context, obj);
+        foreach (SceneObject obj in sceneObjects)
+        {
+            if (ShouldRender(obj, context))
+                DrawObject(context, obj);
+        }
     }
 
     internal static WebGpuRenderPipeline CreatePipeline(nint nativeHandle) =>
@@ -75,14 +81,14 @@ public sealed class MeshRenderPass
 
     private void DrawObject(MeshRenderContext context, SceneObject obj)
     {
-        Matrix4x4 model = Matrix4x4.CreateScale(obj.ScaleX, obj.ScaleY, obj.ScaleZ)
-                          * Matrix4x4.CreateRotationX(MathF.PI / 180f * obj.RotationX)
-                          * Matrix4x4.CreateRotationY(MathF.PI / 180f * obj.RotationY)
-                          * Matrix4x4.CreateRotationZ(MathF.PI / 180f * obj.RotationZ)
-                          * Matrix4x4.CreateTranslation(obj.PositionX, obj.PositionY, obj.PositionZ);
+        Model? modelAsset = GetModel(obj);
+        Transform transform = obj.Transform;
+        Matrix4x4 model = Matrix4x4.CreateScale(transform.Scale)
+                          * Matrix4x4.CreateFromQuaternion(transform.Rotation.Quaternion)
+                          * Matrix4x4.CreateTranslation(transform.Position);
 
         Vector4 color = context.GetColor(obj);
-        if (obj.Model?.Materials.FirstOrDefault() is { } modelMaterial)
+        if (modelAsset?.Materials.FirstOrDefault() is { } modelMaterial)
         {
             Vector3 tinted = new Vector3(color.X, color.Y, color.Z)
                 * new Vector3(modelMaterial.BaseColorFactor.X, modelMaterial.BaseColorFactor.Y, modelMaterial.BaseColorFactor.Z);
@@ -97,7 +103,7 @@ public sealed class MeshRenderPass
             Color = color,
             LightDir = context.GetLightDirection(obj, context.LightDirection),
             IsSelected = context.Wireframe && obj.IsSelected ? 1u : 0u,
-            MaterialParams = obj.Model?.Materials.FirstOrDefault() is { } material
+            MaterialParams = modelAsset?.Materials.FirstOrDefault() is { } material
                 ? new Vector4(material.MetallicFactor, material.RoughnessFactor, 1.0f, 0.0f)
                 : new Vector4(1.0f, 1.0f, 1.0f, 0.0f),
             CameraPosition = new Vector4(context.CameraPosition, 1.0f)
@@ -117,7 +123,7 @@ public sealed class MeshRenderPass
             };
         }
 
-        if (obj.Model != null && resources.ModelMeshes.Count > 0)
+        if (modelAsset != null && resources.ModelMeshes.Count > 0)
         {
             if (!context.Wireframe && _modelPipeline != null)
                 context.Pass.SetPipeline(_modelPipeline.Value);
@@ -142,4 +148,6 @@ public sealed class MeshRenderPass
             (ulong)(indexCount * sizeof(ushort)));
         context.Pass.DrawIndexed(indexCount);
     }
+
+    internal static Model? GetModel(SceneObject obj) => (obj.OwnerRenderer as ModelRenderer)?.Model ?? obj.Model;
 }

@@ -72,6 +72,7 @@ public unsafe class SilkViewportControl : NativeControlHost
     // several draws therefore makes every draw observe the last object's data.
     // Keep one buffer/bind group per object so each draw has stable uniforms.
     private readonly Dictionary<SceneObject, MeshGpuResources> _meshResources = new();
+    private readonly List<SceneObject> _visibleObjects = [];
     public GridApi Grid { get; } = new();
 
     private int _width = 800;
@@ -464,9 +465,10 @@ public unsafe class SilkViewportControl : NativeControlHost
             BindGroup = WebGpuBindGroup.FromNative((nint)WebGpuApi.Wgpu.DeviceCreateBindGroup(_device!, in bindGroupDesc))
         };
 
-        if (obj.Model != null)
+        Model? model = MeshRenderPass.GetModel(obj);
+        if (model != null)
         {
-            foreach (ModelMesh mesh in obj.Model.Meshes)
+            foreach (ModelMesh mesh in model.Meshes)
             {
                 if (mesh.Positions.Count == 0 || mesh.Indices.Count == 0) continue;
 
@@ -514,7 +516,7 @@ public unsafe class SilkViewportControl : NativeControlHost
                     IndexCount = (uint)indices.Length,
                     WireframeIndexCount = (uint)wireframeIndices.Length
                 };
-                CreateMaterialBindGroup(gpuMesh, obj.Model, mesh.MaterialIndex);
+                CreateMaterialBindGroup(gpuMesh, model, mesh.MaterialIndex);
                 resources.ModelMeshes.Add(gpuMesh);
             }
         }
@@ -603,7 +605,7 @@ public unsafe class SilkViewportControl : NativeControlHost
         List<SceneObject>? removed = null;
         foreach (SceneObject obj in _meshResources.Keys)
         {
-            if (!Scene.GameObjects.Contains(obj))
+            if (obj.Renderer?.GameObject is null || !Scene.GameObjects.Contains(obj.Renderer.GameObject))
             {
                 (removed ??= new List<SceneObject>()).Add(obj);
             }
@@ -1118,15 +1120,24 @@ public unsafe class SilkViewportControl : NativeControlHost
         {
             CleanupMeshResources();
 
-            var visibleObjects = Scene.GameObjects
-                .Where(obj => obj.IsVisible)
-                .ToList();
+            _visibleObjects.Clear();
+            foreach (GameObject gameObject in Scene.GameObjects)
+            {
+                if (!gameObject.IsValid) continue;
+                ModelRenderer? renderer = gameObject.GetComponent<ModelRenderer>();
+                if (renderer is not { Enabled: true }) continue;
+                if (!renderer.SceneObject.IsVisible || !renderer.SceneObject.RenderingEnabled) continue;
+                _visibleObjects.Add(renderer.SceneObject);
+            }
+
+            IReadOnlyList<SceneObject> visibleObjects = _visibleObjects;
 
             foreach (var obj in visibleObjects)
             {
                 if (!Scene.IsPaused)
                 {
-                    obj.RotationY = (obj.RotationY + 45f * (float)deltaTime) % 360f;
+                    obj.Transform = obj.Transform.WithRotation(
+                        obj.Transform.Rotation.RotateAroundAxis(Vector3.UnitY, 45f * (float)deltaTime));
                 }
             }
 
@@ -1190,7 +1201,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
             renderPass.SetPipeline(WebGpuRenderPipeline.FromNative((nint)_selectionDepthPipeline));
             renderPass.SetBindGroup(selection.Resources.BindGroup);
-            if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
+            if (MeshRenderPass.GetModel(selection.Object) != null && selection.Resources.ModelMeshes.Count > 0)
             {
                 MeshRenderPass.DrawModel(renderPass, selection.Resources, wireframe: false);
             }
@@ -1201,7 +1212,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
             renderPass.SetPipeline(WebGpuRenderPipeline.FromNative((nint)_outlinePipeline));
             renderPass.SetBindGroup(selection.Resources.BindGroup);
-            if (selection.Object.Model != null && selection.Resources.ModelMeshes.Count > 0)
+            if (MeshRenderPass.GetModel(selection.Object) != null && selection.Resources.ModelMeshes.Count > 0)
             {
                 MeshRenderPass.DrawModel(renderPass, selection.Resources, wireframe: false);
             }

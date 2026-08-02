@@ -5,7 +5,7 @@ public abstract class Component : IValid, IDestroyable
     public GameObject? GameObject { get; internal set; }
     public bool IsValid { get; private set; }
 
-    internal Component()
+    protected Component()
     {
         IsValid = true;
     }

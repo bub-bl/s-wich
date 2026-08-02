@@ -2,7 +2,12 @@
 
 public sealed class ModelRenderer : Renderer
 {
-    [Property] public Model Model { get; set; } = null!;
+    public ModelRenderer(SceneObject? sceneObject = null)
+    {
+        SceneObject = sceneObject ?? new SceneObject();
+        SceneObject.OwnerRenderer = this;
+    }
 
-    public SceneObject? SceneObject { get; private set; }
+    public override SceneObject SceneObject { get; }
+    [Property] public Model? Model { get; set; }
 }

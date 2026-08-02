@@ -51,9 +51,12 @@ public record struct Rotation
         var sinPitch = 2f * (q.W * q.X + q.Y * q.Z);
         var cosPitch = 1f - 2f * (q.X * q.X + q.Y * q.Y);
         var sinYaw = 2f * (q.W * q.Y - q.Z * q.X);
+        var cosYaw = 1f - 2f * (q.X * q.X + q.Y * q.Y);
         var sinRoll = 2f * (q.W * q.Z + q.X * q.Y);
         var pitch = MathF.Atan2(sinPitch, cosPitch);
-        var yaw = MathF.Abs(sinYaw) >= 1f ? MathF.CopySign(MathF.PI / 2f, sinYaw) : MathF.Asin(sinYaw);
+        // atan2 preserves the full [-180°, 180°] yaw range. Using asin here
+        // folds every rotation past ±90° back toward zero.
+        var yaw = MathF.Atan2(sinYaw, cosYaw);
         var roll = MathF.Atan2(sinRoll, 1f - 2f * (q.Y * q.Y + q.Z * q.Z));
 
         const float degrees = 180f / MathF.PI;

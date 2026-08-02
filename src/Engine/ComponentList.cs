@@ -12,6 +12,8 @@ public sealed class ComponentList : IReadOnlyList<Component>
 
     public Component this[int index] => _components[index];
 
+    public bool Contains(Component component) => _components.Contains(component);
+
     public void AddComponent(Component component)
     {
         _components.Add(component);

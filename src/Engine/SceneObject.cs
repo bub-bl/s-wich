@@ -1,10 +1,17 @@
 using System.ComponentModel;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Crowbar.Engine;
 
 public class SceneObject : INotifyPropertyChanged
 {
+    public SceneObject()
+    {
+    }
+
+    internal Renderer? OwnerRenderer { get; set; }
+    public Renderer? Renderer => OwnerRenderer;
     public bool RenderingEnabled { get; set; } = true;
     public Transform Transform { get; set; } = new();
     
@@ -16,59 +23,23 @@ public class SceneObject : INotifyPropertyChanged
         set => SetField(ref field, value);
     } = "GameObject";
 
-    public float PositionX
-    {
-        get;
-        set => SetField(ref field, value);
-    }
+    public float PositionX { get => Transform.Position.X; set => SetPosition(new(value, Transform.Position.Y, Transform.Position.Z)); }
 
-    public float PositionY
-    {
-        get;
-        set => SetField(ref field, value);
-    }
+    public float PositionY { get => Transform.Position.Y; set => SetPosition(new(Transform.Position.X, value, Transform.Position.Z)); }
 
-    public float PositionZ
-    {
-        get;
-        set => SetField(ref field, value);
-    }
+    public float PositionZ { get => Transform.Position.Z; set => SetPosition(new(Transform.Position.X, Transform.Position.Y, value)); }
 
-    public float RotationX
-    {
-        get;
-        set => SetField(ref field, value);
-    }
+    public float RotationX { get => Transform.Rotation.Pitch(); set => SetRotation(new Angles(value, Transform.Rotation.Yaw(), Transform.Rotation.Roll())); }
 
-    public float RotationY
-    {
-        get;
-        set => SetField(ref field, value);
-    }
+    public float RotationY { get => Transform.Rotation.Yaw(); set => SetRotation(new Angles(Transform.Rotation.Pitch(), value, Transform.Rotation.Roll())); }
 
-    public float RotationZ
-    {
-        get;
-        set => SetField(ref field, value);
-    }
+    public float RotationZ { get => Transform.Rotation.Roll(); set => SetRotation(new Angles(Transform.Rotation.Pitch(), Transform.Rotation.Yaw(), value)); }
 
-    public float ScaleX
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 1f;
+    public float ScaleX { get => Transform.Scale.X; set => SetScale(new(value, Transform.Scale.Y, Transform.Scale.Z)); }
 
-    public float ScaleY
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 1f;
+    public float ScaleY { get => Transform.Scale.Y; set => SetScale(new(Transform.Scale.X, value, Transform.Scale.Z)); }
 
-    public float ScaleZ
-    {
-        get;
-        set => SetField(ref field, value);
-    } = 1f;
+    public float ScaleZ { get => Transform.Scale.Z; set => SetScale(new(Transform.Scale.X, Transform.Scale.Y, value)); }
 
     public float ColorR
     {
@@ -134,5 +105,27 @@ public class SceneObject : INotifyPropertyChanged
         field = value;
 
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private void SetPosition(Vector3 position)
+    {
+        if (Transform.Position == position) return;
+        Transform = Transform.WithPosition(position);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Transform)));
+    }
+
+    private void SetRotation(Angles angles)
+    {
+        Rotation rotation = Rotation.From(angles);
+        if (Transform.Rotation.AlmostEqual(rotation)) return;
+        Transform = Transform.WithRotation(rotation);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Transform)));
+    }
+
+    private void SetScale(Vector3 scale)
+    {
+        if (Transform.Scale == scale) return;
+        Transform = Transform.WithScale(scale);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Transform)));
     }
 }
