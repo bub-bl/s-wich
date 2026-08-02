@@ -32,8 +32,8 @@ internal static unsafe class WebGpuNative
             (nuint)sizeof(T));
     }
 
-    internal static void SetBindGroup(WebGPU api, WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup) =>
-        api.RenderPassEncoderSetBindGroup((RenderPassEncoder*)pass.NativeHandle, 0,
+    internal static void SetBindGroup(WebGPU api, WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup, uint groupIndex) =>
+        api.RenderPassEncoderSetBindGroup((RenderPassEncoder*)pass.NativeHandle, groupIndex,
             (BindGroup*)bindGroup.NativeHandle, 0, null);
 
     internal static void SetVertexBuffer(WebGPU api, WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, ulong size) =>

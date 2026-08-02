@@ -12,6 +12,8 @@ internal struct MeshUniforms
     public Vector4 Color;
     public Vector3 LightDir;
     public uint IsSelected;
+    public Vector4 MaterialParams;
+    public Vector4 CameraPosition;
 }
 
 internal sealed class MeshGpuResources
@@ -29,6 +31,10 @@ internal sealed class ModelGpuMesh
     public WebGpuBuffer WireframeIndexBuffer;
     public uint IndexCount;
     public uint WireframeIndexCount;
+    public WebGpuBindGroup MaterialBindGroup;
+    public nint MaterialSampler;
+    public nint[] MaterialTextures { get; } = new nint[5];
+    public nint[] MaterialTextureViews { get; } = new nint[5];
 }
 
 internal sealed class SelectionRenderData

@@ -147,10 +147,10 @@ public sealed class RenderPass : IDisposable
         _runtime.SetPipeline(_handle, pipeline);
     }
 
-    public void SetBindGroup(WebGpuBindGroup bindGroup)
+    public void SetBindGroup(WebGpuBindGroup bindGroup, uint groupIndex = 0)
     {
         EnsureActive();
-        _runtime.SetBindGroup(_handle, bindGroup);
+        _runtime.SetBindGroup(_handle, bindGroup, groupIndex);
     }
 
     public void SetVertexBuffer(WebGpuBuffer buffer, ulong size)

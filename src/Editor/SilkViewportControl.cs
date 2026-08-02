@@ -35,10 +35,13 @@ public unsafe class SilkViewportControl : NativeControlHost
     private TextureView* _depthTextureView;
 
     private ShaderModule* _meshShaderModule;
+    private ShaderModule* _pbrShaderModule;
     private ShaderModule* _gridShaderModule;
     private Shader? _meshShader;
 
     private RenderPipeline* _meshPipeline;
+    private RenderPipeline* _pbrPipeline;
+    private RenderPipeline* _transparentPbrPipeline;
     private RenderPipeline* _transparentMeshPipeline;
     private RenderPipeline* _wireframePipeline;
     private RenderPipeline* _selectionDepthPipeline;
@@ -61,6 +64,7 @@ public unsafe class SilkViewportControl : NativeControlHost
     private BindGroup* _gridBindGroup;
 
     private BindGroupLayout* _meshBindGroupLayout;
+    private BindGroupLayout* _pbrMaterialBindGroupLayout;
     private BindGroupLayout* _gridBindGroupLayout;
 
     // QueueWriteBuffer is ordered on the queue. Reusing one uniform buffer for
@@ -473,18 +477,26 @@ public unsafe class SilkViewportControl : NativeControlHost
             {
                 if (mesh.Positions.Count == 0 || mesh.Indices.Count == 0) continue;
 
-                float[] vertices = new float[mesh.Positions.Count * 6];
+                float[] vertices = new float[mesh.Positions.Count * 12];
                 for (int i = 0; i < mesh.Positions.Count; i++)
                 {
                     Vector3 position = mesh.Positions[i];
                     Vector3 normal = i < mesh.Normals.Count ? mesh.Normals[i] : Vector3.UnitY;
-                    int offset = i * 6;
+                    Vector4 tangent = i < mesh.Tangents.Count ? mesh.Tangents[i] : new Vector4(Vector3.UnitX, 1f);
+                    Vector2 uv = i < mesh.TextureCoordinates.Count ? mesh.TextureCoordinates[i] : Vector2.Zero;
+                    int offset = i * 12;
                     vertices[offset] = position.X;
                     vertices[offset + 1] = position.Y;
                     vertices[offset + 2] = position.Z;
                     vertices[offset + 3] = normal.X;
                     vertices[offset + 4] = normal.Y;
                     vertices[offset + 5] = normal.Z;
+                    vertices[offset + 6] = tangent.X;
+                    vertices[offset + 7] = tangent.Y;
+                    vertices[offset + 8] = tangent.Z;
+                    vertices[offset + 9] = tangent.W;
+                    vertices[offset + 10] = uv.X;
+                    vertices[offset + 11] = uv.Y;
                 }
 
                 uint[] indices = mesh.Indices.Select(index => checked((uint)index)).ToArray();
@@ -500,7 +512,7 @@ public unsafe class SilkViewportControl : NativeControlHost
                     wireframeIndices[offset + 5] = indices[i];
                 }
 
-                resources.ModelMeshes.Add(new ModelGpuMesh
+                var gpuMesh = new ModelGpuMesh
                 {
                     VertexBuffer = WebGpuBuffer.FromNative((nint)CreateGpuBuffer(vertices, BufferUsage.Vertex)),
                     VertexBufferSize = (ulong)(vertices.Length * sizeof(float)),
@@ -508,12 +520,79 @@ public unsafe class SilkViewportControl : NativeControlHost
                     WireframeIndexBuffer = WebGpuBuffer.FromNative((nint)CreateGpuBuffer(wireframeIndices, BufferUsage.Index)),
                     IndexCount = (uint)indices.Length,
                     WireframeIndexCount = (uint)wireframeIndices.Length
-                });
+                };
+                CreateMaterialBindGroup(gpuMesh, obj.Model, mesh.MaterialIndex);
+                resources.ModelMeshes.Add(gpuMesh);
             }
         }
 
         _meshResources.Add(obj, resources);
         return resources;
+    }
+
+    private void CreateMaterialBindGroup(ModelGpuMesh gpuMesh, Model model, int materialIndex)
+    {
+        if (_pbrMaterialBindGroupLayout == null) return;
+
+        ModelMaterial material = materialIndex >= 0 && materialIndex < model.Materials.Count
+            ? model.Materials[materialIndex]
+            : new ModelMaterial();
+        ModelTexture?[] textures =
+        [material.BaseColorTexture, material.NormalTexture, material.MetallicRoughnessTexture, null, null];
+
+        var samplerDesc = new SamplerDescriptor
+        {
+            AddressModeU = AddressMode.Repeat, AddressModeV = AddressMode.Repeat, AddressModeW = AddressMode.Repeat,
+            MagFilter = FilterMode.Linear, MinFilter = FilterMode.Linear, MipmapFilter = MipmapFilterMode.Linear,
+            LodMinClamp = 0, LodMaxClamp = 32, MaxAnisotropy = 1
+        };
+        Sampler* sampler = WebGpuApi.Wgpu.DeviceCreateSampler(_device, in samplerDesc);
+        gpuMesh.MaterialSampler = (nint)sampler;
+
+        for (int i = 0; i < textures.Length; i++)
+        {
+            ModelTexture texture = textures[i] ?? new ModelTexture
+            {
+                Width = 1, Height = 1,
+                Pixels = i == 1 ? [128, 128, 255, 255] : i == 2 ? [0, 255, 0, 255] : [255, 255, 255, 255]
+            };
+            GpuTextureResult gpuTexture = CreateGpuTexture(texture, i is 0 or 4);
+            gpuMesh.MaterialTextures[i] = (nint)gpuTexture.Texture;
+            gpuMesh.MaterialTextureViews[i] = (nint)gpuTexture.View;
+        }
+
+        var entries = stackalloc BindGroupEntry[6];
+        entries[0] = new BindGroupEntry { Binding = 0, Sampler = sampler };
+        for (int i = 0; i < 5; i++)
+            entries[i + 1] = new BindGroupEntry { Binding = (uint)(i + 1), TextureView = (TextureView*)gpuMesh.MaterialTextureViews[i] };
+
+        var desc = new BindGroupDescriptor { Layout = _pbrMaterialBindGroupLayout, EntryCount = 6, Entries = entries };
+        gpuMesh.MaterialBindGroup = WebGpuBindGroup.FromNative((nint)WebGpuApi.Wgpu.DeviceCreateBindGroup(_device, in desc));
+    }
+
+    private struct GpuTextureResult
+    {
+        public Texture* Texture;
+        public TextureView* View;
+    }
+
+    private GpuTextureResult CreateGpuTexture(ModelTexture source, bool srgb)
+    {
+        var textureDesc = new TextureDescriptor
+        {
+            Usage = TextureUsage.CopyDst | TextureUsage.TextureBinding,
+            Dimension = TextureDimension.Dimension2D,
+            Size = new Extent3D { Width = (uint)source.Width, Height = (uint)source.Height, DepthOrArrayLayers = 1 },
+            Format = srgb ? TextureFormat.Rgba8UnormSrgb : TextureFormat.Rgba8Unorm,
+            MipLevelCount = 1, SampleCount = 1
+        };
+        Texture* texture = WebGpuApi.Wgpu.DeviceCreateTexture(_device, in textureDesc);
+        var copy = new ImageCopyTexture { Texture = texture, MipLevel = 0, Aspect = TextureAspect.All };
+        var layout = new TextureDataLayout { Offset = 0, BytesPerRow = checked((uint)(source.Width * 4)), RowsPerImage = checked((uint)source.Height) };
+        var extent = new Extent3D { Width = (uint)source.Width, Height = (uint)source.Height, DepthOrArrayLayers = 1 };
+        fixed (byte* pixels = source.Pixels)
+            WebGpuApi.Wgpu.QueueWriteTexture(_queue, in copy, pixels, (nuint)source.Pixels.Length, in layout, in extent);
+        return new GpuTextureResult { Texture = texture, View = WebGpuApi.Wgpu.TextureCreateView(texture, null) };
     }
 
     private void CleanupMeshResources()
@@ -542,6 +621,21 @@ public unsafe class SilkViewportControl : NativeControlHost
     {
         foreach (ModelGpuMesh mesh in resources.ModelMeshes)
         {
+            if (mesh.MaterialBindGroup.NativeHandle != nint.Zero)
+                WebGpuApi.Wgpu.BindGroupRelease((BindGroup*)mesh.MaterialBindGroup.NativeHandle);
+            if (mesh.MaterialSampler != nint.Zero)
+                WebGpuApi.Wgpu.SamplerRelease((Sampler*)mesh.MaterialSampler);
+            for (int i = 0; i < mesh.MaterialTextures.Length; i++)
+            {
+                if (mesh.MaterialTextureViews[i] != nint.Zero)
+                    WebGpuApi.Wgpu.TextureViewRelease((TextureView*)mesh.MaterialTextureViews[i]);
+                if (mesh.MaterialTextures[i] != nint.Zero)
+                {
+                    Texture* texture = (Texture*)mesh.MaterialTextures[i];
+                    WebGpuApi.Wgpu.TextureDestroy(texture);
+                    WebGpuApi.Wgpu.TextureRelease(texture);
+                }
+            }
             ReleaseBuffer(mesh.VertexBuffer);
             ReleaseBuffer(mesh.IndexBuffer);
             ReleaseBuffer(mesh.WireframeIndexBuffer);
@@ -575,8 +669,10 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         var meshShader = Shader.Load("Shaders/Mesh.wgsl");
         _meshShader = meshShader;
+        var pbrShader = Shader.Load("Shaders/Pbr.wgsl");
         var gridShader = Shader.Load("Shaders/Grid.wgsl");
         _meshShaderModule = CreateShaderModule(meshShader);
+        _pbrShaderModule = CreateShaderModule(pbrShader);
         _gridShaderModule = CreateShaderModule(gridShader);
 
         // BindGroupLayout for Mesh
@@ -588,6 +684,28 @@ public unsafe class SilkViewportControl : NativeControlHost
         };
         var meshLayoutDesc = new BindGroupLayoutDescriptor { EntryCount = 1, Entries = &meshLayoutEntry };
         _meshBindGroupLayout = WebGpuApi.Wgpu.DeviceCreateBindGroupLayout(_device, in meshLayoutDesc);
+
+        var materialEntries = stackalloc BindGroupLayoutEntry[6];
+        materialEntries[0] = new BindGroupLayoutEntry
+        {
+            Binding = 0, Visibility = ShaderStage.Fragment,
+            Sampler = new SamplerBindingLayout { Type = SamplerBindingType.Filtering }
+        };
+        for (int i = 0; i < 5; i++)
+        {
+            materialEntries[i + 1] = new BindGroupLayoutEntry
+            {
+                Binding = (uint)(i + 1), Visibility = ShaderStage.Fragment,
+                Texture = new TextureBindingLayout
+                {
+                    SampleType = TextureSampleType.Float,
+                    ViewDimension = TextureViewDimension.Dimension2D,
+                    Multisampled = false
+                }
+            };
+        }
+        var materialLayoutDesc = new BindGroupLayoutDescriptor { EntryCount = 6, Entries = materialEntries };
+        _pbrMaterialBindGroupLayout = WebGpuApi.Wgpu.DeviceCreateBindGroupLayout(_device, in materialLayoutDesc);
 
         // PipelineLayout for Mesh
         var meshLayoutLocal = _meshBindGroupLayout;
@@ -676,6 +794,38 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         _meshPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in meshPipelineDesc);
 
+        var pbrLayoutHandles = stackalloc BindGroupLayout*[2];
+        pbrLayoutHandles[0] = _meshBindGroupLayout;
+        pbrLayoutHandles[1] = _pbrMaterialBindGroupLayout;
+        var pbrPipelineLayoutDesc = new PipelineLayoutDescriptor { BindGroupLayoutCount = 2, BindGroupLayouts = pbrLayoutHandles };
+        var pbrPipelineLayout = WebGpuApi.Wgpu.DeviceCreatePipelineLayout(_device, in pbrPipelineLayoutDesc);
+        var pbrAttributes = stackalloc VertexAttribute[4];
+        pbrAttributes[0] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 0, ShaderLocation = 0 };
+        pbrAttributes[1] = new VertexAttribute { Format = VertexFormat.Float32x3, Offset = 3 * sizeof(float), ShaderLocation = 1 };
+        pbrAttributes[2] = new VertexAttribute { Format = VertexFormat.Float32x4, Offset = 6 * sizeof(float), ShaderLocation = 2 };
+        pbrAttributes[3] = new VertexAttribute { Format = VertexFormat.Float32x2, Offset = 10 * sizeof(float), ShaderLocation = 3 };
+        var pbrBufferLayout = new VertexBufferLayout { ArrayStride = 12 * sizeof(float), StepMode = VertexStepMode.Vertex, AttributeCount = 4, Attributes = pbrAttributes };
+        var pbrFsEntry = Marshal.StringToHGlobalAnsi(pbrShader.GetEntryPoint("fs_main").Name);
+        var pbrVsEntry = Marshal.StringToHGlobalAnsi(pbrShader.GetEntryPoint("vs_main").Name);
+        var pbrFragment = new FragmentState
+        {
+            Module = _pbrShaderModule, EntryPoint = (byte*)pbrFsEntry.ToPointer(), TargetCount = 1, Targets = &colorTarget
+        };
+        var pbrPipelineDesc = new RenderPipelineDescriptor
+        {
+            Layout = pbrPipelineLayout,
+            Vertex = new VertexState { Module = _pbrShaderModule, EntryPoint = (byte*)pbrVsEntry.ToPointer(), BufferCount = 1, Buffers = &pbrBufferLayout },
+            Primitive = new PrimitiveState { Topology = PrimitiveTopology.TriangleList, FrontFace = FrontFace.Ccw, CullMode = CullMode.None },
+            DepthStencil = &depthStencilState,
+            Multisample = new MultisampleState { Count = 1, Mask = 0xFFFFFFFF },
+            Fragment = &pbrFragment
+        };
+        _pbrPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in pbrPipelineDesc);
+        var pbrTransparentDepth = depthStencilState;
+        pbrTransparentDepth.DepthWriteEnabled = false;
+        pbrPipelineDesc.DepthStencil = &pbrTransparentDepth;
+        _transparentPbrPipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in pbrPipelineDesc);
+
         // Transparent meshes must still test against opaque geometry, but
         // they must not write their own depth. Otherwise an object with
         // alpha 0 would remain an invisible occluder for objects behind it.
@@ -719,10 +869,12 @@ public unsafe class SilkViewportControl : NativeControlHost
         wireframePipelineDesc.DepthStencil = &outlineDepthStencilState;
         _wireframePipeline = WebGpuApi.Wgpu.DeviceCreateRenderPipeline(_device, in wireframePipelineDesc);
         WebGpuRenderPipeline meshPipeline = MeshRenderPass.CreatePipeline((nint)_meshPipeline);
+        WebGpuRenderPipeline pbrPipeline = MeshRenderPass.CreatePipeline((nint)_pbrPipeline);
+        WebGpuRenderPipeline transparentPbrPipeline = MeshRenderPass.CreatePipeline((nint)_transparentPbrPipeline);
         WebGpuRenderPipeline transparentMeshPipeline = MeshRenderPass.CreatePipeline((nint)_transparentMeshPipeline);
         WebGpuRenderPipeline wireframePipeline = MeshRenderPass.CreatePipeline((nint)_wireframePipeline);
-        _opaqueMeshPass = new MeshRenderPass(meshPipeline, MeshRenderPassMode.Opaque);
-        _transparentMeshPass = new MeshRenderPass(transparentMeshPipeline, MeshRenderPassMode.Transparent);
+        _opaqueMeshPass = new MeshRenderPass(meshPipeline, MeshRenderPassMode.Opaque, pbrPipeline);
+        _transparentMeshPass = new MeshRenderPass(transparentMeshPipeline, MeshRenderPassMode.Transparent, transparentPbrPipeline);
         _wireframeMeshPass = new MeshRenderPass(wireframePipeline, MeshRenderPassMode.Wireframe);
 
         var outlineFragmentState = fragmentState;
@@ -1364,17 +1516,21 @@ public unsafe class SilkViewportControl : NativeControlHost
         if (_depthTexture != null) { WebGpuApi.Wgpu.TextureDestroy(_depthTexture); WebGpuApi.Wgpu.TextureRelease(_depthTexture); }
 
         if (_meshPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_meshPipeline);
+        if (_pbrPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_pbrPipeline);
+        if (_transparentPbrPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_transparentPbrPipeline);
         if (_wireframePipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_wireframePipeline);
         if (_selectionDepthPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_selectionDepthPipeline);
         if (_outlinePipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_outlinePipeline);
         if (_gridPipeline != null) WebGpuApi.Wgpu.RenderPipelineRelease(_gridPipeline);
 
         if (_meshShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_meshShaderModule);
+        if (_pbrShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_pbrShaderModule);
         if (_gridShaderModule != null) WebGpuApi.Wgpu.ShaderModuleRelease(_gridShaderModule);
 
         if (_gridBindGroup != null) WebGpuApi.Wgpu.BindGroupRelease(_gridBindGroup);
 
         if (_meshBindGroupLayout != null) WebGpuApi.Wgpu.BindGroupLayoutRelease(_meshBindGroupLayout);
+        if (_pbrMaterialBindGroupLayout != null) WebGpuApi.Wgpu.BindGroupLayoutRelease(_pbrMaterialBindGroupLayout);
         if (_gridBindGroupLayout != null) WebGpuApi.Wgpu.BindGroupLayoutRelease(_gridBindGroupLayout);
 
         foreach (MeshGpuResources resources in _meshResources.Values)

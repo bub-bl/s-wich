@@ -16,12 +16,14 @@ public enum MeshRenderPassMode
 public sealed class MeshRenderPass
 {
     private readonly WebGpuRenderPipeline _pipeline;
+    private readonly WebGpuRenderPipeline? _modelPipeline;
     private readonly MeshRenderPassMode _mode;
 
-    public MeshRenderPass(WebGpuRenderPipeline pipeline, MeshRenderPassMode mode)
+    public MeshRenderPass(WebGpuRenderPipeline pipeline, MeshRenderPassMode mode, WebGpuRenderPipeline? modelPipeline = null)
     {
         _pipeline = pipeline;
         _mode = mode;
+        _modelPipeline = modelPipeline;
     }
 
     public void Execute(MeshRenderContext context, IEnumerable<SceneObject> sceneObjects)
@@ -53,6 +55,8 @@ public sealed class MeshRenderPass
     {
         foreach (ModelGpuMesh mesh in resources.ModelMeshes)
         {
+            if (!wireframe && mesh.MaterialBindGroup.NativeHandle != nint.Zero)
+                pass.SetBindGroup(mesh.MaterialBindGroup, 1);
             WebGpuBuffer indexBuffer = wireframe ? mesh.WireframeIndexBuffer : mesh.IndexBuffer;
             uint indexCount = wireframe ? mesh.WireframeIndexCount : mesh.IndexCount;
             pass.SetVertexBuffer(mesh.VertexBuffer, mesh.VertexBufferSize);
@@ -69,7 +73,7 @@ public sealed class MeshRenderPass
         _ => throw new ArgumentOutOfRangeException()
     };
 
-    private static void DrawObject(MeshRenderContext context, SceneObject obj)
+    private void DrawObject(MeshRenderContext context, SceneObject obj)
     {
         Matrix4x4 model = Matrix4x4.CreateScale(obj.ScaleX, obj.ScaleY, obj.ScaleZ)
                           * Matrix4x4.CreateRotationX(MathF.PI / 180f * obj.RotationX)
@@ -77,14 +81,26 @@ public sealed class MeshRenderPass
                           * Matrix4x4.CreateRotationZ(MathF.PI / 180f * obj.RotationZ)
                           * Matrix4x4.CreateTranslation(obj.PositionX, obj.PositionY, obj.PositionZ);
 
+        Vector4 color = context.GetColor(obj);
+        if (obj.Model?.Materials.FirstOrDefault() is { } modelMaterial)
+        {
+            Vector3 tinted = new Vector3(color.X, color.Y, color.Z)
+                * new Vector3(modelMaterial.BaseColorFactor.X, modelMaterial.BaseColorFactor.Y, modelMaterial.BaseColorFactor.Z);
+            color = new Vector4(tinted, color.W);
+        }
+
         MeshUniforms uniforms = new()
         {
             Model = model,
             View = context.View,
             Proj = context.Proj,
-            Color = context.GetColor(obj),
+            Color = color,
             LightDir = context.GetLightDirection(obj, context.LightDirection),
-            IsSelected = context.Wireframe && obj.IsSelected ? 1u : 0u
+            IsSelected = context.Wireframe && obj.IsSelected ? 1u : 0u,
+            MaterialParams = obj.Model?.Materials.FirstOrDefault() is { } material
+                ? new Vector4(material.MetallicFactor, material.RoughnessFactor, 1.0f, 0.0f)
+                : new Vector4(1.0f, 1.0f, 1.0f, 0.0f),
+            CameraPosition = new Vector4(context.CameraPosition, 1.0f)
         };
 
         MeshGpuResources resources = context.GetResources(obj);
@@ -103,9 +119,13 @@ public sealed class MeshRenderPass
 
         if (obj.Model != null && resources.ModelMeshes.Count > 0)
         {
+            if (!context.Wireframe && _modelPipeline != null)
+                context.Pass.SetPipeline(_modelPipeline.Value);
             DrawModel(context.Pass, resources, context.Wireframe);
             return;
         }
+
+        context.Pass.SetPipeline(_pipeline);
 
         bool pyramid = obj.MeshType == "Pyramid";
         WebGpuBuffer vertexBuffer = pyramid ? context.PyramidVertexBuffer : context.CubeVertexBuffer;

@@ -21,14 +21,16 @@ public sealed class Model
     public string Name { get; }
     public ModelFormat Format { get; }
     public IReadOnlyList<ModelMesh> Meshes { get; }
+    public IReadOnlyList<ModelMaterial> Materials { get; }
 
-    internal Model(string requestedPath, string filePath, ModelFormat format, IReadOnlyList<ModelMesh> meshes)
+    internal Model(string requestedPath, string filePath, ModelFormat format, IReadOnlyList<ModelMesh> meshes, IReadOnlyList<ModelMaterial> materials)
     {
         Path = requestedPath;
         FilePath = filePath;
         Name = System.IO.Path.GetFileNameWithoutExtension(filePath);
         Format = format;
         Meshes = meshes;
+        Materials = materials;
     }
 
     public static Model Load(string path)
@@ -47,20 +49,43 @@ public sealed class ModelMesh
     public string Name { get; }
     public IReadOnlyList<Vector3> Positions { get; }
     public IReadOnlyList<Vector3> Normals { get; }
+    public IReadOnlyList<Vector4> Tangents { get; }
     public IReadOnlyList<Vector2> TextureCoordinates { get; }
     public IReadOnlyList<int> Indices { get; }
+    public int MaterialIndex { get; }
 
     internal ModelMesh(
         string name,
         IReadOnlyList<Vector3> positions,
         IReadOnlyList<Vector3> normals,
+        IReadOnlyList<Vector4> tangents,
         IReadOnlyList<Vector2> textureCoordinates,
-        IReadOnlyList<int> indices)
+        IReadOnlyList<int> indices,
+        int materialIndex)
     {
         Name = name;
         Positions = positions;
         Normals = normals;
+        Tangents = tangents;
         TextureCoordinates = textureCoordinates;
         Indices = indices;
+        MaterialIndex = materialIndex;
     }
+}
+
+public sealed class ModelMaterial
+{
+    public Vector4 BaseColorFactor { get; init; } = Vector4.One;
+    public float MetallicFactor { get; init; } = 1f;
+    public float RoughnessFactor { get; init; } = 1f;
+    public ModelTexture? BaseColorTexture { get; init; }
+    public ModelTexture? NormalTexture { get; init; }
+    public ModelTexture? MetallicRoughnessTexture { get; init; }
+}
+
+public sealed class ModelTexture
+{
+    public required int Width { get; init; }
+    public required int Height { get; init; }
+    public required byte[] Pixels { get; init; }
 }

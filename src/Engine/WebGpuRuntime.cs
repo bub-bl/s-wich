@@ -50,8 +50,8 @@ public sealed class WebGpuRuntime : IDisposable
     internal void WriteBuffer<T>(WebGpuQueue queue, WebGpuBuffer buffer, in T data) where T : unmanaged =>
         WebGpuNative.WriteBuffer(Api, queue, buffer, in data);
 
-    internal void SetBindGroup(WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup) =>
-        WebGpuNative.SetBindGroup(Api, pass, bindGroup);
+    internal void SetBindGroup(WebGpuRenderPassEncoder pass, WebGpuBindGroup bindGroup, uint groupIndex) =>
+        WebGpuNative.SetBindGroup(Api, pass, bindGroup, groupIndex);
 
     internal void SetVertexBuffer(WebGpuRenderPassEncoder pass, WebGpuBuffer buffer, ulong size) =>
         WebGpuNative.SetVertexBuffer(Api, pass, buffer, size);

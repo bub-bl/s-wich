@@ -90,21 +90,21 @@ public partial class MainWindow : Window
         Scene.Objects.Add(cube2);
         Scene.Objects.Add(pyramid);
 
-        const string modelPath = "Assets/model.obj";
+        const string modelPath = "Assets/scene.gltf";
         if (File.Exists(modelPath) || File.Exists(Path.Combine(AppContext.BaseDirectory, modelPath)))
         {
             try
             {
                 var modelObject = new SceneObject
                 {
-                    Name = "Imported Model",
+                    Name = "Industrial Work Light",
                     Model = Model.Load(modelPath),
                     PositionX = 0f,
                     PositionY = 0.5f,
                     PositionZ = -2f,
-                    ScaleX = 1f,
-                    ScaleY = 1f,
-                    ScaleZ = 1f,
+                    ScaleX = 0.01f,
+                    ScaleY = 0.01f,
+                    ScaleZ = 0.01f,
                     ColorR = 0.85f,
                     ColorG = 0.75f,
                     ColorB = 0.35f,
