@@ -205,6 +205,7 @@ public partial class MainWindow : Window
     {
         var gameObject = new GameObject();
         gameObject.AddComponent(new ModelRenderer(sceneObject) { Model = model });
+        gameObject.AddComponent(new RotateComponent());
         Scene.AddGameObject(gameObject);
     }
 

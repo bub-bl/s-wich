@@ -1049,6 +1049,7 @@ public unsafe class SilkViewportControl : NativeControlHost
 
         UpdateKeyboardMovement((float)Math.Clamp(deltaTime, 0.0, 0.1));
         Scene?.UpdateCameraPositionSmoothing((float)deltaTime);
+        Scene?.Update((float)deltaTime);
 
         _frameCount++;
         _fpsTimer += deltaTime;
@@ -1124,14 +1125,6 @@ public unsafe class SilkViewportControl : NativeControlHost
                 .Where(obj => obj is { IsVisible: true })
                 .Cast<SceneObject>()
                 .ToList();
-
-            foreach (var obj in visibleObjects)
-            {
-                if (!Scene.IsPaused)
-                {
-                    obj.RotationY = (obj.RotationY + 45f * (float)deltaTime) % 360f;
-                }
-            }
 
             var meshContext = new MeshRenderContext
             {

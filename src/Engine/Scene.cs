@@ -169,6 +169,25 @@ public class Scene : IValid, INotifyPropertyChanged
             gameObject.Destroy();
     }
 
+    public void Update(float deltaTime)
+    {
+        if (IsPaused || deltaTime <= 0f) return;
+
+        for (int gameObjectIndex = 0; gameObjectIndex < GameObjects.Count; gameObjectIndex++)
+        {
+            GameObject gameObject = GameObjects[gameObjectIndex];
+            if (!gameObject.IsValid) continue;
+
+            IReadOnlyList<Component> components = gameObject.Components;
+            for (int componentIndex = 0; componentIndex < components.Count; componentIndex++)
+            {
+                Component component = components[componentIndex];
+                if (component.IsValid && component.Enabled)
+                    component.OnUpdate(deltaTime);
+            }
+        }
+    }
+
     public void ResetCamera()
     {
         CameraYaw = 45f;

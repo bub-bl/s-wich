@@ -10,7 +10,7 @@ public abstract class Component : IValid, IDestroyable
     {
     }
 
-    protected internal virtual void OnUpdate()
+    protected internal virtual void OnUpdate(float deltaTime)
     {
     }
 
