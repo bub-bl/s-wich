@@ -3,74 +3,202 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Crowbar.Engine;
+using Crowbar.Editor.Tools;
 
 namespace Crowbar.Editor;
 
-public partial class HierarchyPanel : UserControl
+public sealed class HierarchyPanel : EditorControl
 {
-    public static readonly StyledProperty<Scene?> SceneProperty =
-        AvaloniaProperty.Register<HierarchyPanel, Scene?>(nameof(Scene));
+    private Scene? _scene;
 
     public Scene? Scene
     {
-        get => GetValue(SceneProperty);
-        set => SetValue(SceneProperty, value);
-    }
-
-    public ObservableCollection<HierarchyNode> TreeRoots { get; } = new();
-
-    public static readonly StyledProperty<HierarchyNode?> SelectedNodeProperty =
-        AvaloniaProperty.Register<HierarchyPanel, HierarchyNode?>(nameof(SelectedNode));
-
-    public HierarchyNode? SelectedNode
-    {
-        get => GetValue(SelectedNodeProperty);
+        get => _scene;
         set
         {
-            SetValue(SelectedNodeProperty, value);
-            if (value?.SceneObject != null && Scene != null && Scene.SelectedObject != value.SceneObject)
+            if (ReferenceEquals(_scene, value)) return;
+
+            if (_scene is not null)
             {
-                Scene.SelectedObject = value.SceneObject;
+                _scene.GameObjects.CollectionChanged -= OnObjectsChanged;
+                _scene.PropertyChanged -= OnScenePropertyChanged;
             }
+
+            _scene = value;
+
+            if (_scene is not null)
+            {
+                _scene.GameObjects.CollectionChanged += OnObjectsChanged;
+                _scene.PropertyChanged += OnScenePropertyChanged;
+            }
+
+            StateHasChanged();
         }
     }
 
-    public HierarchyPanel()
+    public ObservableCollection<HierarchyNode> TreeRoots { get; } = [];
+
+    protected override Control BuildUi()
     {
-        InitializeComponent();
+        TreeRoots.Clear();
+
+        var tree = new TreeView
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Margin = new Thickness(4, 6, 4, 4),
+            MinHeight = 100
+        };
+        tree.SelectionChanged += OnTreeSelectionChanged;
+
+        RebuildTree(tree);
+
+        return new Border
+        {
+            Background = Brush.Parse("#1F1F23"),
+            BorderBrush = Brush.Parse("#27272A"),
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Child = new Grid
+            {
+                RowDefinitions = new RowDefinitions("Auto, *"),
+                Children =
+                {
+                    new Border
+                    {
+                        Background = Brush.Parse("#27272A"),
+                        Padding = new Thickness(10, 6),
+                        Child = new Grid
+                        {
+                            ColumnDefinitions = new ColumnDefinitions("*, Auto"),
+                            Children =
+                            {
+                                new TextBlock
+                                {
+                                    Text = "HIERARCHY",
+                                    FontWeight = FontWeight.Bold,
+                                    FontSize = 11,
+                                    Foreground = Brush.Parse("#A1A1AA")
+                                },
+                                new TextBlock
+                                {
+                                    [Grid.ColumnProperty] = 1,
+                                    Text = "⌄",
+                                    FontSize = 14,
+                                    Foreground = Brush.Parse("#71717A"),
+                                    VerticalAlignment = VerticalAlignment.Center
+                                }
+                            }
+                        }
+                    },
+                    tree
+                }
+            }
+        };
     }
 
-    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    private void RebuildTree(TreeView tree)
     {
-        base.OnPropertyChanged(change);
+        if (_scene is null) return;
 
-        if (change.Property != SceneProperty) return;
-        
-        if (change.OldValue is Scene oldScene)
+        var sceneNode = new HierarchyNode("Scene", "◉", "Scene");
+        var renderNode = new HierarchyNode("Render", "▾", "Group");
+        renderNode.Children.Add(new HierarchyNode("Main Camera", "◈", "Camera"));
+        renderNode.Children.Add(new HierarchyNode("Sky", "☼", "Environment"));
+
+        foreach (GameObject gameObject in _scene.GameObjects)
         {
-            oldScene.GameObjects.CollectionChanged -= OnObjectsChanged;
-            oldScene.PropertyChanged -= OnScenePropertyChanged;
+            SceneObject? sceneObject = gameObject.ModelRenderer?.SceneObject;
+            if (sceneObject is null) continue;
+
+            var icon = sceneObject.MeshType == "Pyramid" ? "◆" : "■";
+            renderNode.Children.Add(new HierarchyNode(sceneObject.Name, icon, sceneObject.MeshType, sceneObject));
         }
 
-        if (change.NewValue is Scene newScene)
-        {
-            newScene.GameObjects.CollectionChanged += OnObjectsChanged;
-            newScene.PropertyChanged += OnScenePropertyChanged;
-        }
-
-        RebuildTree();
+        sceneNode.Children.Add(renderNode);
+        TreeRoots.Add(sceneNode);
+        tree.Items.Add(CreateTreeItem(sceneNode));
     }
 
-    private void OnObjectsChanged(object? sender, NotifyCollectionChangedEventArgs e) => RebuildTree();
+    private TreeViewItem CreateTreeItem(HierarchyNode node)
+    {
+        var item = new TreeViewItem
+        {
+            Tag = node,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 1),
+            MinHeight = 28,
+            Header = CreateNodeView(node)
+        };
+
+        foreach (HierarchyNode child in node.Children)
+            item.Items.Add(CreateTreeItem(child));
+
+        return item;
+    }
+
+    private Control CreateNodeView(HierarchyNode node)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("20, *, Auto"),
+            MinWidth = 210
+        };
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = node.Icon,
+            FontSize = 13,
+            Foreground = Brush.Parse("#F5B94C"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        grid.Children.Add(new TextBlock
+        {
+            [Grid.ColumnProperty] = 1,
+            Text = node.Name,
+            Foreground = Brush.Parse("#E4E4E7"),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeight.Medium
+        });
+
+        if (node.HasVisibility)
+        {
+            var visibility = new CheckBox
+            {
+                [Grid.ColumnProperty] = 2,
+                IsChecked = node.IsVisible,
+                Content = "◉",
+                FontSize = 11,
+                Foreground = Brush.Parse("#A1A1AA"),
+                Opacity = 0.85,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            visibility.IsCheckedChanged += (_, _) => node.IsVisible = visibility.IsChecked == true;
+            grid.Children.Add(visibility);
+        }
+
+        return new Border
+        {
+            Padding = new Thickness(5, 4),
+            CornerRadius = new CornerRadius(3),
+            Child = grid
+        };
+    }
+
+    private void OnObjectsChanged(object? sender, NotifyCollectionChangedEventArgs e) => StateHasChanged();
 
     private void OnTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        foreach (var item in e.AddedItems)
+        foreach (object item in e.AddedItems)
         {
-            if (item is HierarchyNode { SceneObject: not null } node && Scene != null)
+            if (item is TreeViewItem { Tag: HierarchyNode { SceneObject: not null } node } && _scene is not null)
             {
-                Scene.SelectedObject = node.SceneObject;
+                _scene.SelectedObject = node.SceneObject;
                 break;
             }
         }
@@ -78,60 +206,7 @@ public partial class HierarchyPanel : UserControl
 
     private void OnScenePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Scene.SelectedObject))
-        {
-            SelectedNode = FindNode(Scene?.SelectedObject);
-        }
-    }
-
-    private void RebuildTree()
-    {
-        TreeRoots.Clear();
-        if (Scene == null) return;
-
-        var sceneNode = new HierarchyNode("Scene", "◉", "Scene");
-        var renderNode = new HierarchyNode("Render", "▾", "Group");
-        renderNode.Children.Add(new HierarchyNode("Main Camera", "◈", "Camera"));
-        renderNode.Children.Add(new HierarchyNode("Sky", "☼", "Environment"));
-
-        foreach (GameObject gameObject in Scene.GameObjects)
-        {
-            SceneObject? sceneObject = gameObject.ModelRenderer?.SceneObject;
-            if (sceneObject == null) continue;
-            var icon = sceneObject.MeshType == "Pyramid" ? "◆" : "■";
-            var objectNode = new HierarchyNode(sceneObject.Name, icon, sceneObject.MeshType, sceneObject);
-            sceneObject.PropertyChanged += (_, _) => objectNode.Refresh();
-            renderNode.Children.Add(objectNode);
-        }
-
-        sceneNode.Children.Add(renderNode);
-        TreeRoots.Add(sceneNode);
-        SelectedNode = FindNode(Scene.SelectedObject);
-    }
-
-    private HierarchyNode? FindNode(SceneObject? sceneObject)
-    {
-        if (sceneObject == null || TreeRoots.Count == 0) return null;
-        
-        foreach (var root in TreeRoots)
-        {
-            var found = FindNode(root, sceneObject);
-            if (found != null) return found;
-        }
-        
-        return null;
-    }
-
-    private static HierarchyNode? FindNode(HierarchyNode node, SceneObject sceneObject)
-    {
-        if (node.SceneObject == sceneObject) return node;
-        
-        foreach (var child in node.Children)
-        {
-            var found = FindNode(child, sceneObject);
-            if (found != null) return found;
-        }
-        
-        return null;
+        if (e.PropertyName is nameof(Scene.SelectedObject) or nameof(SceneObject.Name) or nameof(SceneObject.IsVisible))
+            StateHasChanged();
     }
 }

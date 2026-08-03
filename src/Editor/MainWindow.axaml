@@ -135,7 +135,7 @@
         <Grid Grid.Row="2" ColumnDefinitions="260, 4, *, 4, 300">
 
             <!-- Left: Scene Hierarchy Panel -->
-            <editor:HierarchyPanel Grid.Column="0" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"/>
+            <editor:HierarchyPanel x:Name="Hierarchy" Grid.Column="0"/>
 
             <!-- Splitter 1 -->
             <GridSplitter Grid.Column="1" Background="#27272A" ResizeDirection="Columns"/>
@@ -172,7 +172,7 @@
             <GridSplitter Grid.Column="3" Background="#27272A" ResizeDirection="Columns"/>
 
             <!-- Right: Inspector Panel -->
-            <editor:InspectorPanel Grid.Column="4" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"/>
+            <editor:InspectorPanel x:Name="Inspector" Grid.Column="4"/>
 
         </Grid>
 

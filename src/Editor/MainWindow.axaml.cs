@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        Hierarchy.Scene = Scene;
+        Inspector.Scene = Scene;
         _editorWindows = new EditorWindowManager(this);
         AddToolMenuItems();
         AssetsDrawerPopup.PlacementTarget = AssetsDrawerAnchor;
