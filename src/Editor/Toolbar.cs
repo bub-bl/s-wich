@@ -44,10 +44,10 @@ public sealed class Toolbar : EditorControl
     protected override Control BuildUi()
     {
         var play = CreateButton(_isPaused ? "▶ Play" : "⏸ Pause", ToolbarAction.TogglePlay,
-            _isPaused ? "#2563EB" : "#D97706", "White", 12, 4);
+            _isPaused ? EditorTheme.AccentBlueStrong : EditorTheme.AccentOrange, EditorTheme.TextWhite, 12, 4);
         play.FontWeight = FontWeight.SemiBold;
-        var fps = new TextBlock { FontSize = 11, Foreground = Brush.Parse("#4ADE80"), FontWeight = FontWeight.Bold };
-        var frameTime = new TextBlock { FontSize = 11, Foreground = Brush.Parse("#A1A1AA") };
+        var fps = new TextBlock { FontSize = 11, Foreground = EditorTheme.Brush(EditorTheme.SuccessBright), FontWeight = FontWeight.Bold };
+        var frameTime = new TextBlock { FontSize = 11, Foreground = EditorTheme.Brush(EditorTheme.TextMuted) };
         if (_viewport != null)
         {
             fps.Bind(TextBlock.TextProperty, new Binding("Fps") { Source = _viewport, StringFormat = "FPS: {0}" });
@@ -70,7 +70,7 @@ public sealed class Toolbar : EditorControl
         }));
         left.Children.Add(Wrap(CreateButton("🎥 Reset Camera", ToolbarAction.ResetCamera, null, null, 8, 4)));
         left.Children.Add(new Separator
-        { Width = 1, Height = 20, Background = Brush.Parse("#3F3F46"), Margin = new Thickness(4, 0) });
+        { Width = 1, Height = 20, Background = EditorTheme.Brush(EditorTheme.Border), Margin = new Thickness(4, 0) });
         left.Children.Add(Wrap(CreateButton("+ Add Cube", ToolbarAction.AddCube, null, null, 8, 4)));
         left.Children.Add(Wrap(CreateButton("+ Add Pyramid", ToolbarAction.AddPyramid, null, null, 8, 4)));
         left.Children.Add(Wrap(CreateButton("🗑 Remove", ToolbarAction.DeleteObject, null, null, 8, 4)));
@@ -86,14 +86,14 @@ public sealed class Toolbar : EditorControl
         right.Children.Add(frameTime);
         right.Children.Add(new Border
         {
-            Background = Brush.Parse("#27272A"),
+            Background = EditorTheme.Brush(EditorTheme.SurfaceRaised),
             Padding = new Thickness(6, 2),
             CornerRadius = new CornerRadius(4),
             Child = new TextBlock
             {
                 Text = "WebGPU (WGPU)",
                 FontSize = 11,
-                Foreground = Brush.Parse("#60A5FA"),
+                Foreground = EditorTheme.Brush(EditorTheme.AccentBlue),
                 FontWeight = FontWeight.SemiBold
             }
         });
@@ -104,8 +104,8 @@ public sealed class Toolbar : EditorControl
         dock.Children.Add(right);
         return new Border
         {
-            Background = Brush.Parse("#202023"),
-            BorderBrush = Brush.Parse("#3F3F46"),
+            Background = EditorTheme.Brush(EditorTheme.Surface),
+            BorderBrush = EditorTheme.Brush(EditorTheme.Border),
             BorderThickness = new Thickness(0, 1, 0, 1),
             Padding = new Thickness(8, 4),
             Child = dock
@@ -116,8 +116,8 @@ public sealed class Toolbar : EditorControl
         double horizontal, double vertical)
     {
         var button = new Button { Content = content, Padding = new Thickness(horizontal, vertical) };
-        if (background != null) button.Background = Brush.Parse(background);
-        if (foreground != null) button.Foreground = Brush.Parse(foreground);
+        if (background != null) button.Background = EditorTheme.Brush(background);
+        if (foreground != null) button.Foreground = EditorTheme.Brush(foreground);
         button.Click += (_, _) => ActionRequested?.Invoke(this, new ToolbarActionEventArgs(action));
         return button;
     }

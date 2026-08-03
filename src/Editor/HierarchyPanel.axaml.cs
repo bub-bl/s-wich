@@ -58,8 +58,8 @@ public sealed class HierarchyPanel : EditorControl
 
         return new Border
         {
-            Background = Brush.Parse("#1F1F23"),
-            BorderBrush = Brush.Parse("#27272A"),
+            Background = EditorTheme.Brush(EditorTheme.Surface),
+            BorderBrush = EditorTheme.Brush(EditorTheme.SurfaceRaised),
             BorderThickness = new Thickness(0, 0, 1, 0),
             Child = new Grid
             {
@@ -68,7 +68,7 @@ public sealed class HierarchyPanel : EditorControl
                 {
                     new Border
                     {
-                        Background = Brush.Parse("#27272A"),
+                        Background = EditorTheme.Brush(EditorTheme.Surface),
                         Padding = new Thickness(10, 6),
                         Child = new Grid
                         {
@@ -80,14 +80,14 @@ public sealed class HierarchyPanel : EditorControl
                                     Text = "HIERARCHY",
                                     FontWeight = FontWeight.Bold,
                                     FontSize = 11,
-                                    Foreground = Brush.Parse("#A1A1AA")
+                                    Foreground = EditorTheme.Brush(EditorTheme.TextMuted)
                                 },
                                 new TextBlock
                                 {
                                     [Grid.ColumnProperty] = 1,
                                     Text = "⌄",
                                     FontSize = 14,
-                                    Foreground = Brush.Parse("#71717A"),
+                                    Foreground = EditorTheme.Brush(EditorTheme.TextSubtle),
                                     VerticalAlignment = VerticalAlignment.Center
                                 }
                             }
@@ -151,7 +151,7 @@ public sealed class HierarchyPanel : EditorControl
         {
             Text = node.Icon,
             FontSize = 13,
-            Foreground = Brush.Parse("#F5B94C"),
+            Foreground = EditorTheme.Brush(EditorTheme.IconYellow),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -160,7 +160,7 @@ public sealed class HierarchyPanel : EditorControl
         {
             [Grid.ColumnProperty] = 1,
             Text = node.Name,
-            Foreground = Brush.Parse("#E4E4E7"),
+            Foreground = EditorTheme.Brush(EditorTheme.TextPrimary),
             VerticalAlignment = VerticalAlignment.Center,
             FontWeight = FontWeight.Medium
         });
@@ -173,7 +173,7 @@ public sealed class HierarchyPanel : EditorControl
                 IsChecked = node.IsVisible,
                 Content = "◉",
                 FontSize = 11,
-                Foreground = Brush.Parse("#A1A1AA"),
+                Foreground = EditorTheme.Brush(EditorTheme.TextMuted),
                 Opacity = 0.85,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Right

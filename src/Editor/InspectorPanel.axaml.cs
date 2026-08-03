@@ -45,23 +45,23 @@ public sealed class InspectorPanel : EditorControl
             content.Children.Add(new TextBlock
             {
                 Text = "No object selected",
-                Foreground = Brush.Parse("#A1A1AA")
+                Foreground = EditorTheme.Brush(EditorTheme.TextMuted)
             });
         }
         else
         {
             content.Children.Add(CreateObjectNameSection(selected));
             content.Children.Add(CreateComponentsSection(selected));
-            content.Children.Add(new Separator { Background = Brush.Parse("#27272A") });
+            content.Children.Add(new Separator { Background = EditorTheme.Brush(EditorTheme.SurfaceRaised) });
             content.Children.Add(CreateTransformSection(selected));
-            content.Children.Add(new Separator { Background = Brush.Parse("#27272A") });
+            content.Children.Add(new Separator { Background = EditorTheme.Brush(EditorTheme.SurfaceRaised) });
             content.Children.Add(CreateMaterialSection(selected));
         }
 
         return new Border
         {
-            Background = Brush.Parse("#1F1F23"),
-            BorderBrush = Brush.Parse("#27272A"),
+            Background = EditorTheme.Brush(EditorTheme.Surface),
+            BorderBrush = EditorTheme.Brush(EditorTheme.SurfaceRaised),
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new Grid
             {
@@ -70,14 +70,14 @@ public sealed class InspectorPanel : EditorControl
                 {
                     new Border
                     {
-                        Background = Brush.Parse("#27272A"),
+                        Background = EditorTheme.Brush(EditorTheme.Surface),
                         Padding = new Thickness(10, 6),
                         Child = new TextBlock
                         {
                             Text = "INSPECTOR",
                             FontWeight = FontWeight.Bold,
                             FontSize = 11,
-                            Foreground = Brush.Parse("#A1A1AA")
+                            Foreground = EditorTheme.Brush(EditorTheme.TextMuted)
                         }
                     },
                     new ScrollViewer
@@ -127,7 +127,7 @@ public sealed class InspectorPanel : EditorControl
 
         return new Border
         {
-            Background = Brush.Parse("#27272A"),
+            Background = EditorTheme.Brush(EditorTheme.SurfaceRaised),
             Padding = new Thickness(8),
             CornerRadius = new CornerRadius(3),
             Child = new StackPanel
@@ -144,7 +144,7 @@ public sealed class InspectorPanel : EditorControl
                             {
                                 Text = component.GetType().Name,
                                 FontWeight = FontWeight.SemiBold,
-                                Foreground = Brush.Parse("#E4E4E7")
+                                Foreground = EditorTheme.Brush(EditorTheme.TextPrimary)
                             },
                             new ContentControl
                             {
@@ -181,7 +181,7 @@ public sealed class InspectorPanel : EditorControl
                 new TextBlock
                 {
                     Text = property.Name,
-                    Foreground = Brush.Parse("#A1A1AA"),
+                    Foreground = EditorTheme.Brush(EditorTheme.TextMuted),
                     VerticalAlignment = VerticalAlignment.Center
                 },
                 new ContentControl
@@ -221,12 +221,12 @@ public sealed class InspectorPanel : EditorControl
         double increment, string format, double? minimum = null)
     {
         var row = new StackPanel { Spacing = 4 };
-        row.Children.Add(new TextBlock { Text = title, FontSize = 11, Foreground = Brush.Parse("#6B7280") });
+        row.Children.Add(new TextBlock { Text = title, FontSize = 11, Foreground = EditorTheme.Brush(EditorTheme.TextLabel) });
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*, *, *") };
-        grid.Children.Add(CreateNumericField("X", getX, setX, "#EF4444", increment, format, minimum));
-        grid.Children.Add(CreateNumericField("Y", getY, setY, "#10B981", increment, format, minimum, 1));
-        grid.Children.Add(CreateNumericField("Z", getZ, setZ, "#3B82F6", increment, format, minimum, 2));
+        grid.Children.Add(CreateNumericField("X", getX, setX, EditorTheme.AxisRed, increment, format, minimum));
+        grid.Children.Add(CreateNumericField("Y", getY, setY, EditorTheme.AxisGreen, increment, format, minimum, 1));
+        grid.Children.Add(CreateNumericField("Z", getZ, setZ, EditorTheme.AxisBlue, increment, format, minimum, 2));
         row.Children.Add(grid);
         return row;
     }
@@ -332,7 +332,7 @@ public sealed class InspectorPanel : EditorControl
             Text = text,
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
-            Foreground = Brush.Parse("#9CA3AF")
+            Foreground = EditorTheme.Brush(EditorTheme.TextSecondary)
         };
 
     private void OnScenePropertyChanged(object? sender, PropertyChangedEventArgs e)

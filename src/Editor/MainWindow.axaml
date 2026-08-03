@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Crowbar"
         xmlns:editor="clr-namespace:Crowbar.Editor"
+        xmlns:theme="clr-namespace:Crowbar.Editor"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="Crowbar.Editor.MainWindow"
         x:Name="RootWindow"
@@ -13,8 +14,8 @@
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="-1"
-        Background="#18181B"
-        Foreground="#E4E4E7">
+        Background="{x:Static theme:EditorTheme.WindowBackgroundBrush}"
+        Foreground="{x:Static theme:EditorTheme.TextPrimaryBrush}">
 
     <Window.Styles>
         <Style Selector="MenuItem">
@@ -28,7 +29,7 @@
             <Setter Property="Margin" Value="0,3"/>
         </Style>
         <Style Selector="MenuItem.title-menu-item:pointerover">
-            <Setter Property="Background" Value="#3F3F46"/>
+            <Setter Property="Background" Value="{x:Static theme:EditorTheme.BorderBrush}"/>
         </Style>
         <Style Selector="Button">
             <Setter Property="CornerRadius" Value="6"/>
@@ -40,18 +41,18 @@
         </Style>
         <Style Selector="ToggleButton.drawer-tab">
             <Setter Property="CornerRadius" Value="5"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#A1A1AA"/>
+            <Setter Property="Background" Value="{x:Static theme:EditorTheme.SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{x:Static theme:EditorTheme.TextMutedBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Padding" Value="10,3"/>
         </Style>
         <Style Selector="ToggleButton.drawer-tab:pointerover">
-            <Setter Property="Background" Value="#3F3F46"/>
-            <Setter Property="Foreground" Value="#F4F4F5"/>
+            <Setter Property="Background" Value="{x:Static theme:EditorTheme.BorderBrush}"/>
+            <Setter Property="Foreground" Value="{x:Static theme:EditorTheme.TextBrightBrush}"/>
         </Style>
         <Style Selector="ToggleButton.drawer-tab:checked">
-            <Setter Property="Background" Value="#3F3F46"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{x:Static theme:EditorTheme.SurfaceBrush}"/>
+            <Setter Property="Foreground" Value="{x:Static theme:EditorTheme.TextWhiteBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
     </Window.Styles>
@@ -73,7 +74,7 @@
             <editor:HierarchyPanel x:Name="Hierarchy" Grid.Column="0"/>
 
             <!-- Splitter 1 -->
-            <GridSplitter Grid.Column="1" Background="#27272A" ResizeDirection="Columns"/>
+            <GridSplitter Grid.Column="1" Background="{x:Static theme:EditorTheme.SurfaceRaisedBrush}" ResizeDirection="Columns"/>
 
             <!-- Center: Viewport Panel with Silk.NET Render Control -->
             <Grid Grid.Column="2" Background="Transparent"
@@ -85,26 +86,26 @@
                 <editor:SilkViewportControl x:Name="Viewport" Scene="{Binding Scene, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"/>
 
                 <!-- HUD / Viewport Overlay -->
-                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Padding="8,6" Background="#CC18181B" CornerRadius="6" IsHitTestVisible="False">
+                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Padding="8,6" Background="{x:Static theme:EditorTheme.OverlayBrush}" CornerRadius="6" IsHitTestVisible="False">
                     <StackPanel Spacing="2">
-                        <TextBlock Text="Silk.NET WebGPU Viewport" FontWeight="Bold" FontSize="11" Foreground="#60A5FA"/>
+                        <TextBlock Text="Silk.NET WebGPU Viewport" FontWeight="Bold" FontSize="11" Foreground="{x:Static theme:EditorTheme.AccentBlueBrush}"/>
                         <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,0">
-                            <TextBlock Text="{Binding #Viewport.Fps, StringFormat='FPS: {0}'}" FontSize="11" Foreground="#4ADE80" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding #Viewport.FrameTimeMs, StringFormat='Frame: {0:F1} ms'}" FontSize="11" Foreground="#A1A1AA"/>
+                            <TextBlock Text="{Binding #Viewport.Fps, StringFormat='FPS: {0}'}" FontSize="11" Foreground="{x:Static theme:EditorTheme.SuccessBrightBrush}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding #Viewport.FrameTimeMs, StringFormat='Frame: {0:F1} ms'}" FontSize="11" Foreground="{x:Static theme:EditorTheme.TextMutedBrush}"/>
                         </StackPanel>
-                        <TextBlock Text="{Binding #Viewport.GpuVendor, StringFormat='GPU: {0}'}" FontSize="10" Foreground="#71717A"/>
-                        <TextBlock Text="{Binding #Viewport.GpuRenderer, StringFormat='Renderer: {0}'}" FontSize="10" Foreground="#71717A"/>
+                        <TextBlock Text="{Binding #Viewport.GpuVendor, StringFormat='GPU: {0}'}" FontSize="10" Foreground="{x:Static theme:EditorTheme.TextSubtleBrush}"/>
+                        <TextBlock Text="{Binding #Viewport.GpuRenderer, StringFormat='Renderer: {0}'}" FontSize="10" Foreground="{x:Static theme:EditorTheme.TextSubtleBrush}"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Navigation Controls Help Overlay -->
-                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Padding="8,4" Background="#AA18181B" CornerRadius="4" IsHitTestVisible="False">
-                    <TextBlock Text="LMB / RMB Drag: Look | MMB Drag: Pan | Scroll: Move" FontSize="10" Foreground="#A1A1AA"/>
+                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Padding="8,4" Background="{x:Static theme:EditorTheme.OverlaySubtleBrush}" CornerRadius="4" IsHitTestVisible="False">
+                    <TextBlock Text="LMB / RMB Drag: Look | MMB Drag: Pan | Scroll: Move" FontSize="10" Foreground="{x:Static theme:EditorTheme.TextMutedBrush}"/>
                 </Border>
             </Grid>
 
             <!-- Splitter 2 -->
-            <GridSplitter Grid.Column="3" Background="#27272A" ResizeDirection="Columns"/>
+            <GridSplitter Grid.Column="3" Background="{x:Static theme:EditorTheme.SurfaceRaisedBrush}" ResizeDirection="Columns"/>
 
             <!-- Right: Inspector Panel -->
             <editor:InspectorPanel x:Name="Inspector" Grid.Column="4"/>

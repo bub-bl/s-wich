@@ -20,16 +20,16 @@ public sealed class AssetsDrawer : EditorControl
     private Stopwatch? _animationClock;
     private double _animationStart;
     private double _animationTarget;
+    private Control? _placementTarget;
     private Border? _drawer;
     private Popup? _popup;
     private TextBox? _console;
 
-    public event EventHandler? CloseRequested;
-    public event EventHandler<bool>? TabChanged;
     public bool IsOpen => _isOpen;
 
     public void SetPlacementTarget(Control target)
     {
+        _placementTarget = target;
         if (_popup != null) _popup.PlacementTarget = target;
     }
 
@@ -55,7 +55,6 @@ public sealed class AssetsDrawer : EditorControl
     {
         _showAssets = showAssets;
         StateHasChanged();
-        TabChanged?.Invoke(this, showAssets);
     }
 
     public void AppendLog(string message)
@@ -88,12 +87,11 @@ public sealed class AssetsDrawer : EditorControl
             Content = "×",
             Padding = new Thickness(8, 2),
             Background = Brushes.Transparent,
-            Foreground = Brush.Parse("#A1A1AA")
+            Foreground = EditorTheme.Brush(EditorTheme.TextMuted)
         };
         close.Click += (_, _) =>
         {
             SetOpen(false);
-            CloseRequested?.Invoke(this, EventArgs.Empty);
         };
         var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto, Auto, Auto, *, Auto") };
         var title = new StackPanel
@@ -103,7 +101,7 @@ public sealed class AssetsDrawer : EditorControl
             Children =
             {
                 new TextBlock
-                    { Text = "◆", Foreground = Brush.Parse("#60A5FA"), VerticalAlignment = VerticalAlignment.Center },
+                    { Text = "◆", Foreground = EditorTheme.Brush(EditorTheme.AccentBlue), VerticalAlignment = VerticalAlignment.Center },
                 new TextBlock
                 {
                     Text = "Console / Project Assets", FontWeight = FontWeight.SemiBold,
@@ -120,14 +118,14 @@ public sealed class AssetsDrawer : EditorControl
         };
         AddGrid(headerGrid, title, 0);
         AddGrid(headerGrid,
-            new Border { Width = 1, Height = 18, Background = Brush.Parse("#52525B"), Margin = new Thickness(12, 0) },
+            new Border { Width = 1, Height = 18, Background = EditorTheme.Brush(EditorTheme.BorderSubtle), Margin = new Thickness(12, 0) },
             1);
         AddGrid(headerGrid, tabs, 2);
         AddGrid(headerGrid,
             new TextBlock
             {
                 Text = "Space to toggle drawer",
-                Foreground = Brush.Parse("#71717A"),
+                Foreground = EditorTheme.Brush(EditorTheme.TextSubtle),
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(12, 0, 0, 0)
@@ -135,8 +133,8 @@ public sealed class AssetsDrawer : EditorControl
         AddGrid(headerGrid, close, 4);
         var header = new Border
         {
-            Background = Brush.Parse("#27272A"),
-            BorderBrush = Brush.Parse("#3F3F46"),
+            Background = EditorTheme.Brush(EditorTheme.Surface),
+            BorderBrush = EditorTheme.Brush(EditorTheme.Border),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(12, 8),
             CornerRadius = new CornerRadius(8, 8, 0, 0),
@@ -146,15 +144,15 @@ public sealed class AssetsDrawer : EditorControl
         {
             IsReadOnly = true,
             AcceptsReturn = true,
-            Background = Brush.Parse("#121214"),
-            Foreground = Brush.Parse("#A1A1AA"),
+            Background = EditorTheme.Brush(EditorTheme.ConsoleBackground),
+            Foreground = EditorTheme.Brush(EditorTheme.TextMuted),
             FontFamily = "Consolas, Courier New",
             Text = string.Join(Environment.NewLine, _logs)
         };
         var consoleContent = new Border
         {
             Padding = new Thickness(4),
-            Background = Brush.Parse("#121214"),
+            Background = EditorTheme.Brush(EditorTheme.ConsoleBackground),
             Margin = new Thickness(4),
             CornerRadius = new CornerRadius(4),
             IsVisible = !_showAssets,
@@ -163,7 +161,7 @@ public sealed class AssetsDrawer : EditorControl
         var assetsContent = new Border
         {
             Padding = new Thickness(12),
-            Background = Brush.Parse("#121214"),
+            Background = EditorTheme.Brush(EditorTheme.ConsoleBackground),
             Margin = new Thickness(4),
             CornerRadius = new CornerRadius(4),
             IsVisible = _showAssets,
@@ -180,8 +178,8 @@ public sealed class AssetsDrawer : EditorControl
             Height = 360,
             Width = _width,
             Margin = new Thickness(8),
-            Background = Brush.Parse("#18181B"),
-            BorderBrush = Brush.Parse("#3F3F46"),
+            Background = EditorTheme.Brush(EditorTheme.Surface),
+            BorderBrush = EditorTheme.Brush(EditorTheme.Border),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8, 8, 0, 0),
             BoxShadow = new BoxShadows(new BoxShadow { OffsetY = -2, Blur = 8, Color = Color.FromArgb(0x55, 0, 0, 0) }),

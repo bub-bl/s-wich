@@ -34,7 +34,7 @@ public sealed class TitleBar : EditorControl
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 12,
-            Foreground = Brush.Parse("#D4D4D8"),
+            Foreground = EditorTheme.Brush(EditorTheme.TextTitle),
             IsHitTestVisible = false
         });
         var menu = new Menu
@@ -55,7 +55,7 @@ public sealed class TitleBar : EditorControl
             Child = new TextBlock
             {
                 Text = "◆",
-                Foreground = Brush.Parse("#60A5FA"),
+                Foreground = EditorTheme.Brush(EditorTheme.AccentBlue),
                 FontSize = 10,
                 VerticalAlignment = VerticalAlignment.Center
             }
@@ -67,8 +67,8 @@ public sealed class TitleBar : EditorControl
         content.Children.Add(dragArea);
         return new Border
         {
-            Background = Brush.Parse("#1F1F1F"),
-            BorderBrush = Brush.Parse("#3F3F46"),
+            Background = EditorTheme.Brush(EditorTheme.WindowBackground),
+            BorderBrush = EditorTheme.Brush(EditorTheme.Border),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = content
         };
