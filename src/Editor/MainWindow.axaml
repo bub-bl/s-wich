@@ -3,7 +3,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Crowbar"
-        xmlns:chrome="clr-namespace:Avalonia.Controls.Chrome;assembly=Avalonia.Controls"
         xmlns:editor="clr-namespace:Crowbar.Editor"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="Crowbar.Editor.MainWindow"
@@ -60,76 +59,12 @@
     <Grid RowDefinitions="Auto, Auto, *, 0, Auto">
 
         <!-- 1. Custom titlebar: menus share the same row as the window controls. -->
-        <Border Grid.Row="0" Background="#1F1F1F" BorderBrush="#3F3F46" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto, *" Height="32" Margin="0,0,138,0">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="32" Height="32" Padding="11,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="◆" Foreground="#60A5FA" FontSize="10" VerticalAlignment="Center"/>
-                    </Border>
-                    <Menu Background="Transparent" Height="32" VerticalAlignment="Center">
-                        <MenuItem Classes="title-menu-item" Header="_File">
-                            <MenuItem Header="_New Scene" Click="OnNewSceneClick"/>
-                            <Separator/>
-                            <MenuItem Header="_Exit" Click="OnExitClick"/>
-                        </MenuItem>
-                        <MenuItem Classes="title-menu-item" Header="_Edit">
-                            <MenuItem Header="_Duplicate"/>
-                            <MenuItem Header="_Delete" Click="OnDeleteObjectClick"/>
-                        </MenuItem>
-                        <MenuItem Classes="title-menu-item" Header="_GameObject">
-                            <MenuItem Header="3D Object > Cube" Click="OnAddCubeClick"/>
-                            <MenuItem Header="3D Object > Pyramid" Click="OnAddPyramidClick"/>
-                        </MenuItem>
-                        <MenuItem x:Name="WindowMenu" Classes="title-menu-item" Header="_Window">
-                            <MenuItem Header="Reset Viewport Camera" Click="OnResetCameraClick"/>
-                        </MenuItem>
-                        <MenuItem Classes="title-menu-item" Header="_Help">
-                            <MenuItem Header="About Engine"/>
-                        </MenuItem>
-                    </Menu>
-                </StackPanel>
-                <Grid x:Name="TitleBarDragArea" Grid.Column="1" Background="Transparent"
-                      chrome:WindowDecorationProperties.ElementRole="TitleBar"
-                      PointerPressed="OnTitleBarPointerPressed">
-                    <TextBlock Text="Crowbar Engine" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="12" Foreground="#D4D4D8" IsHitTestVisible="False"/>
-                </Grid>
-            </Grid>
-        </Border>
+        <editor:TitleBar Grid.Row="0" x:Name="TitleBar"
+                         ActionRequested="OnTitleBarAction"
+                         DragAreaPointerPressed="OnTitleBarPointerPressed"/>
 
         <!-- 2. Main Toolbar -->
-        <Border Grid.Row="1" Background="#202023" BorderBrush="#3F3F46" BorderThickness="0,1,0,1" Padding="8,4">
-            <DockPanel LastChildFill="False">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <Button Content="▶ Play" x:Name="BtnPlay" Click="OnTogglePlayClick" Background="#2563EB" Foreground="White" Padding="12,4" FontWeight="SemiBold"/>
-                    </Border>
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <ToggleButton Content="🌐 Wireframe" IsChecked="{Binding Scene.IsWireframe, RelativeSource={RelativeSource AncestorType=editor:MainWindow}}" Padding="8,4"/>
-                    </Border>
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <Button Content="🎥 Reset Camera" Click="OnResetCameraClick" Padding="8,4"/>
-                    </Border>
-                    <Separator Width="1" Height="20" Background="#3F3F46" Margin="4,0"/>
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <Button Content="+ Add Cube" Click="OnAddCubeClick" Padding="8,4"/>
-                    </Border>
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <Button Content="+ Add Pyramid" Click="OnAddPyramidClick" Padding="8,4"/>
-                    </Border>
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <Button Content="🗑 Remove" Click="OnDeleteObjectClick" Padding="8,4"/>
-                    </Border>
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="0,0,8,0">
-                    <TextBlock Text="{Binding #Viewport.Fps, StringFormat='FPS: {0}'}" FontSize="11" Foreground="#4ADE80" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding #Viewport.FrameTimeMs, StringFormat='{}{0:F1} ms'}" FontSize="11" Foreground="#A1A1AA"/>
-                    <Border Background="#27272A" Padding="6,2" CornerRadius="4">
-                        <TextBlock Text="WebGPU (WGPU)" FontSize="11" Foreground="#60A5FA" FontWeight="SemiBold"/>
-                    </Border>
-                </StackPanel>
-            </DockPanel>
-        </Border>
+        <editor:Toolbar x:Name="Toolbar" Grid.Row="1"/>
 
         <!-- 3. Main Workspace (Hierarchy | Viewport | Inspector) -->
         <Grid Grid.Row="2" ColumnDefinitions="260, 4, *, 4, 300">
@@ -177,71 +112,10 @@
         </Grid>
 
         <!-- 4. Status Bar -->
-        <Border Grid.Row="4" Background="#09090B" Padding="8,2">
-            <Grid ColumnDefinitions="Auto, *, Auto">
-                <TextBlock Grid.Column="0" Text="● Engine Ready" FontSize="10" Foreground="#22C55E"/>
-                <TextBlock Grid.Column="1" Text="{Binding Scene.SelectedObject.Name, StringFormat='Selected: {0}', RelativeSource={RelativeSource AncestorType=editor:MainWindow}}"
-                           FontSize="10" Foreground="#A1A1AA" HorizontalAlignment="Center"/>
-                <TextBlock Grid.Column="2" Text="Avalonia 12 + Silk.NET 2.23 (WGPU)" FontSize="10" Foreground="#71717A"/>
-            </Grid>
-        </Border>
+        <editor:StatusBar Grid.Row="4"/>
 
         <!-- Console and Project Assets drawer: opened from the bottom with Space, like UE5. -->
-        <Border x:Name="AssetsDrawerAnchor" Grid.RowSpan="5" Height="1" VerticalAlignment="Bottom"
-                IsHitTestVisible="False" Background="Transparent"/>
-
-        <Popup x:Name="AssetsDrawerPopup" Grid.RowSpan="5" IsOpen="False" Placement="Top"
-               HorizontalAlignment="Stretch">
-            <Border x:Name="AssetsDrawer" Height="360" Margin="8" Background="#18181B" BorderBrush="#3F3F46"
-                    BorderThickness="1" CornerRadius="8,8,0,0" BoxShadow="0 -2 8 0 #55000000">
-                <Grid RowDefinitions="Auto, *">
-                    <Border Grid.Row="0" Background="#27272A" BorderBrush="#3F3F46" BorderThickness="0,0,0,1"
-                            Padding="12,8" CornerRadius="8,8,0,0">
-                    <Grid ColumnDefinitions="Auto, Auto, Auto, *, Auto">
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="◆" Foreground="#60A5FA" VerticalAlignment="Center"/>
-                            <TextBlock Text="Console / Project Assets" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <Border Grid.Column="1" Width="1" Height="18" Background="#52525B" Margin="12,0"/>
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                            <ToggleButton x:Name="BtnConsoleTab" Classes="drawer-tab" Content="Console"
-                                          IsChecked="False" Click="OnConsoleTabClick"/>
-                            <ToggleButton x:Name="BtnAssetsTab" Classes="drawer-tab" Content="Project Assets"
-                                          IsChecked="True" Click="OnAssetsTabClick"/>
-                        </StackPanel>
-                        <TextBlock Grid.Column="3" Text="Space to toggle drawer" Foreground="#71717A"
-                                   FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                        <Button Grid.Column="4" Content="×" Click="OnCloseAssetsDrawerClick"
-                                ToolTip.Tip="Close Project Assets (Space / Escape)" Padding="8,2"
-                                Background="Transparent" Foreground="#A1A1AA"/>
-                    </Grid>
-                </Border>
-                <Grid Grid.Row="1">
-                    <Border x:Name="ConsoleTabContent" Padding="4" Background="#121214" Margin="4" CornerRadius="4"
-                            IsVisible="False">
-                        <TextBox x:Name="TxtConsole" IsReadOnly="True" AcceptsReturn="True"
-                                 Background="#121214" Foreground="#A1A1AA" FontFamily="Consolas, Courier New"/>
-                    </Border>
-                    <Border x:Name="AssetsTabContent" Padding="12" Background="#121214" Margin="4" CornerRadius="4">
-                        <WrapPanel Orientation="Horizontal">
-                            <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
-                                <TextBlock Text="📁" FontSize="32" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Shaders" FontSize="11" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
-                                <TextBlock Text="📁" FontSize="32" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Textures" FontSize="11" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Width="80" Margin="8" HorizontalAlignment="Center">
-                                <TextBlock Text="🧊" FontSize="32" HorizontalAlignment="Center"/>
-                                <TextBlock Text="model.obj" FontSize="11" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </WrapPanel>
-                    </Border>
-                </Grid>
-                </Grid>
-            </Border>
-        </Popup>
+        <editor:AssetsDrawer x:Name="AssetsDrawerControl" Grid.Row="0" Grid.RowSpan="5"/>
 
     </Grid>
 </Window>
