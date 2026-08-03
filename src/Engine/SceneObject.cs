@@ -20,7 +20,7 @@ public sealed class SceneObject : INotifyPropertyChanged
             if (current.Equals(value)) return;
 
             field = value;
-            
+
             if (OwnerRenderer?.GameObject is { } gameObject)
             {
                 if (!gameObject.WorldTransform.Equals(value))

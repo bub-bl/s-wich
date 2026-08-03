@@ -1,11 +1,9 @@
-using System.Diagnostics;
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Crowbar.Engine;
 using Crowbar.Editor.Tools;
 
@@ -13,15 +11,9 @@ namespace Crowbar.Editor;
 
 public partial class MainWindow : Window
 {
-    private const double AssetsDrawerOuterMargin = 16;
     private Point _lastMousePos;
     private bool _isOrbiting;
     private bool _isPanning;
-    private bool _isAssetsDrawerOpen;
-    private DispatcherTimer? _assetsDrawerAnimationTimer;
-    private Stopwatch? _assetsDrawerAnimationClock;
-    private double _assetsDrawerAnimationStart;
-    private double _assetsDrawerAnimationTarget;
     private readonly EditorWindowManager _editorWindows;
 
     public Scene Scene { get; } = new();
@@ -35,12 +27,9 @@ public partial class MainWindow : Window
         Inspector.Scene = Scene;
         _editorWindows = new EditorWindowManager(this);
         Toolbar.ActionRequested += OnToolbarAction;
-        AssetsDrawerControl.CloseRequested += OnCloseAssetsDrawerRequested;
-        AssetsDrawerControl.TabChanged += OnDrawerTabChanged;
         AddToolMenuItems();
-        AssetsDrawerControl.Popup.PlacementTarget = AssetsDrawerControl.Anchor;
-        UpdateAssetsDrawerWidth();
-        AssetsDrawerControl.Drawer.RenderTransform = new TranslateTransform(0, 360);
+        AssetsDrawerControl.SetPlacementTarget(AssetsDrawerControl);
+        AssetsDrawerControl.SetWidth(Bounds.Width);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
         Closing += OnMainWindowClosing;
         SizeChanged += OnMainWindowSizeChanged;
@@ -57,7 +46,7 @@ public partial class MainWindow : Window
             Header = "Fake C# Tool"
         };
         fakeToolItem.Click += OnOpenFakeToolClick;
-        TitleBar.WindowMenu.Items.Add(fakeToolItem);
+        TitleBar.AddWindowMenuItem(fakeToolItem);
     }
 
     private void OnTitleBarAction(object? sender, TitleBarActionEventArgs e)
@@ -90,7 +79,7 @@ public partial class MainWindow : Window
         switch (e.Action)
         {
             case ToolbarAction.TogglePlay:
-                OnTogglePlayClick(Toolbar.PlayButton, new RoutedEventArgs());
+                OnTogglePlayClick(this, new RoutedEventArgs());
                 break;
             case ToolbarAction.ResetCamera:
                 OnResetCameraClick(this, new RoutedEventArgs());
@@ -264,10 +253,7 @@ public partial class MainWindow : Window
     private void OnTogglePlayClick(object? sender, RoutedEventArgs e)
     {
         Scene.IsPaused = !Scene.IsPaused;
-        if (sender is Button btn)
-        {
-            Toolbar.SetPlaying(Scene.IsPaused);
-        }
+        Toolbar.SetPlaying(Scene.IsPaused);
         Log(Scene.IsPaused ? "Engine simulation paused." : "Engine simulation started.");
     }
 
@@ -304,80 +290,26 @@ public partial class MainWindow : Window
             ToggleAssetsDrawer();
             e.Handled = true;
         }
-        else if (e.Key == Key.Escape && _isAssetsDrawerOpen)
+        else if (e.Key == Key.Escape && AssetsDrawerControl.IsOpen)
         {
             SetAssetsDrawerOpen(false);
             e.Handled = true;
         }
     }
 
-    private void OnCloseAssetsDrawerRequested(object? sender, EventArgs e)
-    {
-        SetAssetsDrawerOpen(false);
-    }
-
-    private void OnDrawerTabChanged(object? sender, bool showAssets)
-    {
-        SetDrawerTab(showAssets);
-    }
-
-    private void SetDrawerTab(bool showAssets)
-    {
-        AssetsDrawerControl.ConsoleTabButton.IsChecked = !showAssets;
-        AssetsDrawerControl.AssetsTabButton.IsChecked = showAssets;
-        AssetsDrawerControl.ConsoleContent.IsVisible = !showAssets;
-        AssetsDrawerControl.AssetsContent.IsVisible = showAssets;
-    }
-
     private void ToggleAssetsDrawer()
     {
-        SetAssetsDrawerOpen(!_isAssetsDrawerOpen);
+        AssetsDrawerControl.Toggle();
     }
 
     private void SetAssetsDrawerOpen(bool isOpen)
     {
-        _isAssetsDrawerOpen = isOpen;
-        // Do not keep a closed Popup alive: its native/layout surface can still
-        // intercept pointer input even when its content is translated off-screen.
-        AssetsDrawerControl.Popup.IsOpen = isOpen;
-        AnimateAssetsDrawer(isOpen ? 0 : AssetsDrawerControl.Drawer.Height);
+        AssetsDrawerControl.SetOpen(isOpen);
     }
 
     private void OnMainWindowSizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        UpdateAssetsDrawerWidth();
-    }
-
-    private void UpdateAssetsDrawerWidth()
-    {
-        AssetsDrawerControl.Drawer.Width = Math.Max(0, Bounds.Width - AssetsDrawerOuterMargin);
-    }
-
-    private void AnimateAssetsDrawer(double target)
-    {
-        _assetsDrawerAnimationTimer?.Stop();
-        _assetsDrawerAnimationStart = (AssetsDrawerControl.Drawer.RenderTransform as TranslateTransform)?.Y ?? AssetsDrawerControl.Drawer.Height;
-        _assetsDrawerAnimationTarget = target;
-        _assetsDrawerAnimationClock = Stopwatch.StartNew();
-        _assetsDrawerAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _assetsDrawerAnimationTimer.Tick += OnAssetsDrawerAnimationTick;
-        _assetsDrawerAnimationTimer.Start();
-    }
-
-    private void OnAssetsDrawerAnimationTick(object? sender, EventArgs e)
-    {
-        const double durationMs = 220;
-        double progress = Math.Clamp((_assetsDrawerAnimationClock?.Elapsed.TotalMilliseconds ?? durationMs) / durationMs, 0, 1);
-        double easedProgress = 1 - Math.Pow(1 - progress, 3);
-        double y = _assetsDrawerAnimationStart + (_assetsDrawerAnimationTarget - _assetsDrawerAnimationStart) * easedProgress;
-        AssetsDrawerControl.Drawer.RenderTransform = new TranslateTransform(0, y);
-
-        if (progress >= 1)
-        {
-            _assetsDrawerAnimationTimer?.Stop();
-            _assetsDrawerAnimationTimer = null;
-            _assetsDrawerAnimationClock = null;
-        }
+        AssetsDrawerControl.SetWidth(Bounds.Width);
     }
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -483,7 +415,6 @@ public partial class MainWindow : Window
     public void Log(string message)
     {
         string timestamp = DateTime.Now.ToString("HH:mm:ss");
-        AssetsDrawerControl.ConsoleTextBox.Text += $"[{timestamp}] {message}\n";
-        AssetsDrawerControl.ConsoleTextBox.CaretIndex = AssetsDrawerControl.ConsoleTextBox.Text?.Length ?? 0;
+        AssetsDrawerControl.AppendLog(message);
     }
 }

@@ -15,7 +15,7 @@ public sealed class HierarchyNode(string name, string icon, string kind, SceneOb
     public string Kind { get; } = kind;
     public bool IsObjectNode => sceneObject != null;
     public bool HasVisibility => IsObjectNode;
-    
+
     public bool IsVisible
     {
         get => sceneObject?.IsVisible ?? true;

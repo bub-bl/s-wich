@@ -2,29 +2,30 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Crowbar.Editor.Tools;
 
 namespace Crowbar.Editor;
 
-public sealed class TitleBar : UserControl
+public sealed class TitleBar : EditorControl
 {
+    private readonly List<MenuItem> _windowItems = [];
     public event EventHandler<TitleBarActionEventArgs>? ActionRequested;
     public event EventHandler<PointerPressedEventArgs>? DragAreaPointerPressed;
 
-    public MenuItem WindowMenu { get; }
-
-    public TitleBar()
+    public void AddWindowMenuItem(MenuItem item)
     {
-        WindowMenu = CreateMenuItem("_Window");
-        WindowMenu.Items.Add(CreateMenuItem("Reset Viewport Camera", TitleBarAction.ResetCamera));
+        _windowItems.Add(item);
+        StateHasChanged();
+    }
 
-        var dragArea = new Grid
-        {
-            Background = Brushes.Transparent,
-            [Grid.ColumnProperty] = 1
-        };
+    protected override Control BuildUi()
+    {
+        var windowMenu = CreateMenuItem("_Window");
+        windowMenu.Items.Add(CreateMenuItem("Reset Viewport Camera", TitleBarAction.ResetCamera));
+        foreach (var item in _windowItems) windowMenu.Items.Add(item);
+        var dragArea = new Grid { Background = Brushes.Transparent, [Grid.ColumnProperty] = 1 };
         WindowDecorationProperties.SetElementRole(dragArea, WindowDecorationsElementRole.TitleBar);
         dragArea.PointerPressed += (sender, e) => DragAreaPointerPressed?.Invoke(sender, e);
         dragArea.Children.Add(new TextBlock
@@ -36,30 +37,15 @@ public sealed class TitleBar : UserControl
             Foreground = Brush.Parse("#D4D4D8"),
             IsHitTestVisible = false
         });
-
         var menu = new Menu
-        {
-            Background = Brushes.Transparent,
-            Height = 32,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+            { Background = Brushes.Transparent, Height = 32, VerticalAlignment = VerticalAlignment.Center };
         menu.Items.Add(CreateFileMenu());
         menu.Items.Add(CreateEditMenu());
         menu.Items.Add(CreateGameObjectMenu());
-        menu.Items.Add(WindowMenu);
+        menu.Items.Add(windowMenu);
         menu.Items.Add(CreateMenuItem("_Help", new MenuItem { Header = "About Engine" }));
-
-        var content = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto, *"),
-            Height = 32,
-            Margin = new Thickness(0, 0, 138, 0)
-        };
         var left = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+            { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(new Border
         {
             Width = 32,
@@ -75,10 +61,11 @@ public sealed class TitleBar : UserControl
             }
         });
         left.Children.Add(menu);
+        var content = new Grid
+            { ColumnDefinitions = new ColumnDefinitions("Auto, *"), Height = 32, Margin = new Thickness(0, 0, 138, 0) };
         content.Children.Add(left);
         content.Children.Add(dragArea);
-
-        Content = new Border
+        return new Border
         {
             Background = Brush.Parse("#1F1F1F"),
             BorderBrush = Brush.Parse("#3F3F46"),
@@ -87,13 +74,10 @@ public sealed class TitleBar : UserControl
         };
     }
 
-    private MenuItem CreateFileMenu() => CreateMenuItem("_File",
-        CreateMenuItem("_New Scene", TitleBarAction.NewScene),
-        new Separator(),
-        CreateMenuItem("_Exit", TitleBarAction.Exit));
+    private MenuItem CreateFileMenu() => CreateMenuItem("_File", CreateMenuItem("_New Scene", TitleBarAction.NewScene),
+        new Separator(), CreateMenuItem("_Exit", TitleBarAction.Exit));
 
-    private MenuItem CreateEditMenu() => CreateMenuItem("_Edit",
-        new MenuItem { Header = "_Duplicate" },
+    private MenuItem CreateEditMenu() => CreateMenuItem("_Edit", new MenuItem { Header = "_Duplicate" },
         CreateMenuItem("_Delete", TitleBarAction.DeleteObject));
 
     private MenuItem CreateGameObjectMenu() => CreateMenuItem("_GameObject",
@@ -104,8 +88,7 @@ public sealed class TitleBar : UserControl
     {
         var menuItem = new MenuItem { Header = header };
         menuItem.Classes.Add("title-menu-item");
-        foreach (var item in items)
-            menuItem.Items.Add(item);
+        foreach (var item in items) menuItem.Items.Add(item);
         return menuItem;
     }
 

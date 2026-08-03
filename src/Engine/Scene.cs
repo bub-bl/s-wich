@@ -23,11 +23,11 @@ public class Scene : IValid, INotifyPropertyChanged
     private float _cameraPositionTargetZ = 4.242641f;
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    
+
     public SceneFileMetadata? Metadata { get; internal init; }
     public ObservableCollection<GameObject> GameObjects { get; } = [];
     public bool IsValid => Current == this;
-    
+
     public static Scene? Current { get; private set; }
 
     public SceneObject? SelectedObject
@@ -36,11 +36,11 @@ public class Scene : IValid, INotifyPropertyChanged
         set
         {
             if (field == value) return;
-            
+
             field?.IsSelected = false;
             field = value;
             field?.IsSelected = true;
-                
+
             OnPropertyChanged();
         }
     }
@@ -130,7 +130,7 @@ public class Scene : IValid, INotifyPropertyChanged
             _cameraPositionTargetZ = value;
         }
     }
-    
+
     public IDisposable Push()
     {
         var previous = Current;
@@ -141,7 +141,7 @@ public class Scene : IValid, INotifyPropertyChanged
             Current = previous;
         });
     }
-    
+
     public void AddGameObject(GameObject gameObject)
     {
         ArgumentNullException.ThrowIfNull(gameObject);
@@ -218,13 +218,13 @@ public class Scene : IValid, INotifyPropertyChanged
     {
         var clampedDeltaTime = Math.Clamp(deltaTime, 0f, 0.1f);
         var positionSmoothing = 1f - MathF.Exp(-CAMERA_POSITION_SMOOTHING * clampedDeltaTime);
-        
+
         _cameraPositionX = float.Lerp(_cameraPositionX, _cameraPositionTargetX, positionSmoothing);
         _cameraPositionY = float.Lerp(_cameraPositionY, _cameraPositionTargetY, positionSmoothing);
         _cameraPositionZ = float.Lerp(_cameraPositionZ, _cameraPositionTargetZ, positionSmoothing);
 
         var rotationSmoothing = 1f - MathF.Exp(-CAMERA_ROTATION_SMOOTHING * clampedDeltaTime);
-        
+
         _cameraYaw = float.Lerp(_cameraYaw, _cameraYawTarget, rotationSmoothing);
         _cameraPitch = float.Lerp(_cameraPitch, _cameraPitchTarget, rotationSmoothing);
     }
@@ -233,7 +233,7 @@ public class Scene : IValid, INotifyPropertyChanged
     {
         if (Equals(field, value)) return;
         field = value;
-        
+
         OnPropertyChanged(propertyName);
     }
 

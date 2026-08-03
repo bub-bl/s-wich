@@ -19,20 +19,20 @@ public sealed class Grid
 
     public GridUniforms CreateUniforms(Matrix4x4 view, Matrix4x4 projection,
         Matrix4x4 viewInverse, Matrix4x4 projectionInverse) => new()
-    {
-        View = view,
-        Proj = projection,
-        ViewInv = viewInverse,
-        ProjInv = projectionInverse,
-        Settings = new(
+        {
+            View = view,
+            Proj = projection,
+            ViewInv = viewInverse,
+            ProjInv = projectionInverse,
+            Settings = new(
             Size.HasValue ? MathF.Max(Size.Value, 0.01f) : 0f,
             MathF.Max(CellSize, 0.001f),
             MathF.Max(FadeDistance, 0.01f),
             ShowAxes ? 1f : 0f),
-        LineColor = LineColor,
-        XAxisColor = XAxisColor,
-        ZAxisColor = ZAxisColor
-    };
+            LineColor = LineColor,
+            XAxisColor = XAxisColor,
+            ZAxisColor = ZAxisColor
+        };
 }
 
 [StructLayout(LayoutKind.Sequential)]
