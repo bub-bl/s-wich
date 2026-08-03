@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     private Stopwatch? _assetsDrawerAnimationClock;
     private double _assetsDrawerAnimationStart;
     private double _assetsDrawerAnimationTarget;
-    private FakeEditorTool? _fakeToolWindow;
+    private readonly EditorWindowManager _editorWindows;
 
     public Scene Scene { get; } = new();
 
@@ -30,11 +30,13 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        _editorWindows = new EditorWindowManager(this);
         AddToolMenuItems();
         AssetsDrawerPopup.PlacementTarget = AssetsDrawerAnchor;
         UpdateAssetsDrawerWidth();
         AssetsDrawer.RenderTransform = new TranslateTransform(0, 360);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Closing += OnMainWindowClosing;
         SizeChanged += OnMainWindowSizeChanged;
 
         InitDefaultScene();
@@ -54,19 +56,18 @@ public partial class MainWindow : Window
 
     private void OnOpenFakeToolClick(object? sender, RoutedEventArgs e)
     {
-        if (_fakeToolWindow is { IsVisible: true })
-        {
-            _fakeToolWindow.Activate();
-            return;
-        }
-
         var context = new EditorContext
         {
-            Scene = Scene
+            Scene = Scene,
+            Windows = _editorWindows
         };
 
-        _fakeToolWindow = new FakeEditorTool(context);
-        _fakeToolWindow.Show(this);
+        _editorWindows.Open(new FakeEditorTool(context));
+    }
+
+    private void OnMainWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        _editorWindows.CloseAll();
     }
 
     private void InitDefaultScene()

@@ -9,4 +9,6 @@ namespace Crowbar.Editor.Tools;
 public sealed class EditorContext
 {
     public required Scene Scene { get; init; }
+
+    public required EditorWindowManager Windows { get; init; }
 }
