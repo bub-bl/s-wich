@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Crowbar.Engine;
+using Crowbar.Editor.Tools;
 
 namespace Crowbar.Editor;
 
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
     private Stopwatch? _assetsDrawerAnimationClock;
     private double _assetsDrawerAnimationStart;
     private double _assetsDrawerAnimationTarget;
+    private FakeEditorTool? _fakeToolWindow;
 
     public Scene Scene { get; } = new();
 
@@ -28,6 +30,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        AddToolMenuItems();
         AssetsDrawerPopup.PlacementTarget = AssetsDrawerAnchor;
         UpdateAssetsDrawerWidth();
         AssetsDrawer.RenderTransform = new TranslateTransform(0, 360);
@@ -37,6 +40,33 @@ public partial class MainWindow : Window
         InitDefaultScene();
         Log("Engine initialized with Avalonia 12 and Silk.NET WebGPU (WGPU).");
         Log("Viewport hardware acceleration active.");
+    }
+
+    private void AddToolMenuItems()
+    {
+        var fakeToolItem = new MenuItem
+        {
+            Header = "Fake C# Tool"
+        };
+        fakeToolItem.Click += OnOpenFakeToolClick;
+        WindowMenu.Items.Add(fakeToolItem);
+    }
+
+    private void OnOpenFakeToolClick(object? sender, RoutedEventArgs e)
+    {
+        if (_fakeToolWindow is { IsVisible: true })
+        {
+            _fakeToolWindow.Activate();
+            return;
+        }
+
+        var context = new EditorContext
+        {
+            Scene = Scene
+        };
+
+        _fakeToolWindow = new FakeEditorTool(context);
+        _fakeToolWindow.Show(this);
     }
 
     private void InitDefaultScene()

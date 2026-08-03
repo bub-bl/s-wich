@@ -80,7 +80,7 @@
                             <MenuItem Header="3D Object > Cube" Click="OnAddCubeClick"/>
                             <MenuItem Header="3D Object > Pyramid" Click="OnAddPyramidClick"/>
                         </MenuItem>
-                        <MenuItem Classes="title-menu-item" Header="_Window">
+                        <MenuItem x:Name="WindowMenu" Classes="title-menu-item" Header="_Window">
                             <MenuItem Header="Reset Viewport Camera" Click="OnResetCameraClick"/>
                         </MenuItem>
                         <MenuItem Classes="title-menu-item" Header="_Help">
