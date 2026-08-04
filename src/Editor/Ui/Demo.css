@@ -1,0 +1,4 @@
+root { width: 1280px; height: 720px; }
+.card { width: 420px; height: 130px; margin: 32px; padding: 18px; background-color: #18253aff; border-radius: 12px; }
+.title { height: 32px; color: #ffffffff; }
+.subtitle { height: 24px; color: #9cc8ffff; }

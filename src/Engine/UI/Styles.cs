@@ -1,0 +1,143 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
+namespace Crowbar.Engine.UI;
+
+public sealed class ComputedStyle
+{
+    public string Display { get; set; } = "flex";
+    public string FlexDirection { get; set; } = "column";
+    public string AlignItems { get; set; } = "stretch";
+    public string JustifyContent { get; set; } = "flex-start";
+    public string Overflow { get; set; } = "visible";
+    public float? Width { get; set; }
+    public float? Height { get; set; }
+    public float? MinWidth { get; set; }
+    public float? MaxWidth { get; set; }
+    public float? MinHeight { get; set; }
+    public float? MaxHeight { get; set; }
+    public float FlexGrow { get; set; }
+    public float Gap { get; set; }
+    public float Margin { get; set; }
+    public float Padding { get; set; }
+    public float Opacity { get; set; } = 1;
+    public float BorderRadius { get; set; }
+    public UiColor BackgroundColor { get; set; } = UiColor.Transparent;
+    public UiColor Color { get; set; } = UiColor.White;
+
+    public ComputedStyle Clone() => (ComputedStyle)MemberwiseClone();
+}
+
+public readonly record struct UiColor(byte R, byte G, byte B, byte A)
+{
+    public static UiColor Transparent => new(0, 0, 0, 0);
+    public static UiColor White => new(255, 255, 255, 255);
+    public static UiColor Black => new(0, 0, 0, 255);
+
+    public static bool TryParse(string value, out UiColor color)
+    {
+        value = value.Trim();
+        if (value.Equals("transparent", StringComparison.OrdinalIgnoreCase)) { color = Transparent; return true; }
+        if (value.Equals("white", StringComparison.OrdinalIgnoreCase)) { color = White; return true; }
+        if (value.Equals("black", StringComparison.OrdinalIgnoreCase)) { color = Black; return true; }
+        if (value.StartsWith('#') && (value.Length == 7 || value.Length == 9))
+        {
+            if (uint.TryParse(value[1..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var n))
+            {
+                if (value.Length == 7) color = new((byte)(n >> 16), (byte)(n >> 8), (byte)n, 255);
+                else color = new((byte)(n >> 24), (byte)(n >> 16), (byte)(n >> 8), (byte)n);
+                return true;
+            }
+        }
+        var match = Regex.Match(value, "^rgba?\\(([^)]+)\\)$", RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var parts = match.Groups[1].Value.Split(',');
+            if (parts.Length is 3 or 4 && byte.TryParse(parts[0], out var r) && byte.TryParse(parts[1], out var g) && byte.TryParse(parts[2], out var b))
+            {
+                byte a = 255;
+                if (parts.Length == 4 && float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var alpha)) a = (byte)Math.Clamp(alpha * 255, 0, 255);
+                color = new(r, g, b, a); return true;
+            }
+        }
+        color = default; return false;
+    }
+}
+
+public sealed record StyleRule(string Selector, IReadOnlyDictionary<string, string> Properties, int Order)
+{
+    public bool Matches(Panel panel)
+    {
+        var selector = Selector.Trim();
+        if (selector.Contains(' ')) return selector.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last() is var last && MatchesSimple(last, panel);
+        return MatchesSimple(selector, panel);
+    }
+
+    private static bool MatchesSimple(string selector, Panel panel)
+    {
+        if (selector.StartsWith('.')) return panel.Classes.Contains(selector[1..]);
+        if (selector.StartsWith('#')) return panel.Id == selector[1..];
+        return selector == "*" || selector.Equals(panel.TagName, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+public sealed class StyleSheet
+{
+    private readonly List<StyleRule> _rules = [];
+    public IReadOnlyList<StyleRule> Rules => _rules;
+
+    public static StyleSheet Parse(string css)
+    {
+        var sheet = new StyleSheet();
+        var order = 0;
+        foreach (Match match in Regex.Matches(css, "(?s)([^{}]+)\\{([^{}]*)\\}"))
+        {
+            var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var declaration in match.Groups[2].Value.Split(';'))
+            {
+                var split = declaration.Split(':', 2);
+                if (split.Length == 2) properties[split[0].Trim()] = split[1].Trim();
+            }
+            foreach (var selector in match.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                sheet._rules.Add(new StyleRule(selector.Trim(), properties, order++));
+        }
+        return sheet;
+    }
+
+    public ComputedStyle Compute(Panel panel)
+    {
+        var style = new ComputedStyle();
+        foreach (var rule in _rules.Where(r => r.Matches(panel)).OrderBy(r => r.Order)) Apply(style, rule.Properties);
+        Apply(style, panel.InlineStyle);
+        return style;
+    }
+
+    internal static void Apply(ComputedStyle style, IReadOnlyDictionary<string, string> properties)
+    {
+        foreach (var (key, value) in properties)
+        {
+            if (key.Equals("display", StringComparison.OrdinalIgnoreCase)) style.Display = value;
+            else if (key.Equals("flex-direction", StringComparison.OrdinalIgnoreCase)) style.FlexDirection = value;
+            else if (key.Equals("align-items", StringComparison.OrdinalIgnoreCase)) style.AlignItems = value;
+            else if (key.Equals("justify-content", StringComparison.OrdinalIgnoreCase)) style.JustifyContent = value;
+            else if (key.Equals("overflow", StringComparison.OrdinalIgnoreCase)) style.Overflow = value;
+            else if (key.Equals("width", StringComparison.OrdinalIgnoreCase)) style.Width = ParseLength(value);
+            else if (key.Equals("height", StringComparison.OrdinalIgnoreCase)) style.Height = ParseLength(value);
+            else if (key.Equals("min-width", StringComparison.OrdinalIgnoreCase)) style.MinWidth = ParseLength(value);
+            else if (key.Equals("max-width", StringComparison.OrdinalIgnoreCase)) style.MaxWidth = ParseLength(value);
+            else if (key.Equals("min-height", StringComparison.OrdinalIgnoreCase)) style.MinHeight = ParseLength(value);
+            else if (key.Equals("max-height", StringComparison.OrdinalIgnoreCase)) style.MaxHeight = ParseLength(value);
+            else if (key.Equals("margin", StringComparison.OrdinalIgnoreCase)) style.Margin = ParseLength(value) ?? 0;
+            else if (key.Equals("padding", StringComparison.OrdinalIgnoreCase)) style.Padding = ParseLength(value) ?? 0;
+            else if (key.Equals("gap", StringComparison.OrdinalIgnoreCase)) style.Gap = ParseLength(value) ?? 0;
+            else if (key.Equals("flex-grow", StringComparison.OrdinalIgnoreCase)) style.FlexGrow = ParseFloat(value);
+            else if (key.Equals("opacity", StringComparison.OrdinalIgnoreCase)) style.Opacity = ParseFloat(value);
+            else if (key.Equals("border-radius", StringComparison.OrdinalIgnoreCase)) style.BorderRadius = ParseLength(value) ?? 0;
+            else if (key.Equals("background-color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var bg)) style.BackgroundColor = bg;
+            else if (key.Equals("color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var fg)) style.Color = fg;
+        }
+    }
+
+    private static float? ParseLength(string value) => float.TryParse(value.Trim().TrimEnd('p', 'x'), NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? Math.Max(0, n) : null;
+    private static float ParseFloat(string value) => float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : 0;
+}

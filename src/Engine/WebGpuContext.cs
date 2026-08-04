@@ -2,6 +2,7 @@ using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
 using System.Runtime.InteropServices;
 using System.Numerics;
+using Crowbar.Engine.UI;
 
 namespace Crowbar.Engine;
 
@@ -45,6 +46,17 @@ public sealed unsafe class WebGpuContext : IDisposable
     private int _mouseCenterY;
     private bool _hasPresentedFrame;
     private bool _disposed;
+    public UiSystem? Ui { get; set; }
+    private Texture* _uiTexture;
+    private TextureView* _uiTextureView;
+    private Sampler* _uiSampler;
+    private ShaderModule* _uiShader;
+    private RenderPipeline* _uiPipeline;
+    private Silk.NET.WebGPU.Buffer* _uiVertexBuffer;
+    private BindGroupLayout* _uiBindGroupLayout;
+    private BindGroup* _uiBindGroup;
+    private int _uiWidth;
+    private int _uiHeight;
 
     public WebGpuContext(nint windowHandle, int width, int height)
     {
@@ -83,6 +95,7 @@ public sealed unsafe class WebGpuContext : IDisposable
             ConfigureSurface(width, height);
             CreateCameraResources();
             CreateCubeResources();
+            CreateUiResources(_width, _height);
             UpdateCamera(0);
             Console.WriteLine("WebGPU device initialized.");
         }
@@ -132,6 +145,15 @@ public sealed unsafe class WebGpuContext : IDisposable
         Runtime.SetVertexBuffer(pass, WebGpuBuffer.FromNative((nint)_cubeVertexBuffer),
             (ulong)(CubeVertexCount * 6 * sizeof(float)));
         Runtime.Draw(pass, CubeVertexCount);
+        if (Ui is not null && _uiPipeline != null && _uiBindGroup != null)
+        {
+            var pixels = Ui.Render();
+            if (pixels.Length > 0) UpdateUiTexture(pixels.Span);
+            Runtime.SetPipeline(pass, WebGpuRenderPipeline.FromNative((nint)_uiPipeline));
+            Runtime.SetBindGroup(pass, WebGpuBindGroup.FromNative((nint)_uiBindGroup), 0);
+            Runtime.SetVertexBuffer(pass, WebGpuBuffer.FromNative((nint)_uiVertexBuffer), (ulong)(6 * 4 * sizeof(float)));
+            Runtime.Draw(pass, 6);
+        }
         Runtime.EndRenderPass(pass);
         WebGpuCommandBuffer commandBuffer = Runtime.FinishCommandEncoder(encoder);
         Runtime.Submit(Queue, commandBuffer);
@@ -191,6 +213,7 @@ public sealed unsafe class WebGpuContext : IDisposable
         _height = height;
         ConfigureSurface(width, height);
         UpdateCamera(0);
+        CreateUiResources(width, height);
     }
 
     private void ConfigureSurface(int width, int height)
@@ -516,6 +539,83 @@ public sealed unsafe class WebGpuContext : IDisposable
         }
     }
 
+    private void CreateUiResources(int width, int height)
+    {
+        if (_uiTextureView != null) Runtime.Api.TextureViewRelease(_uiTextureView);
+        if (_uiTexture != null) { Runtime.Api.TextureDestroy(_uiTexture); Runtime.Api.TextureRelease(_uiTexture); }
+        var textureDescriptor = new TextureDescriptor
+        {
+            Usage = TextureUsage.TextureBinding | TextureUsage.CopyDst,
+            Dimension = TextureDimension.Dimension2D,
+            Size = new Extent3D { Width = (uint)Math.Max(1, width), Height = (uint)Math.Max(1, height), DepthOrArrayLayers = 1 },
+            Format = TextureFormat.Rgba8Unorm, MipLevelCount = 1, SampleCount = 1
+        };
+        _uiTexture = Runtime.Api.DeviceCreateTexture(Device.UnsafeHandle, in textureDescriptor);
+        _uiTextureView = Runtime.Api.TextureCreateView(_uiTexture, null);
+        _uiWidth = Math.Max(1, width); _uiHeight = Math.Max(1, height);
+
+        if (_uiPipeline != null) Runtime.Api.RenderPipelineRelease(_uiPipeline);
+        if (_uiShader != null) Runtime.Api.ShaderModuleRelease(_uiShader);
+        if (_uiBindGroup != null) Runtime.Api.BindGroupRelease(_uiBindGroup);
+        if (_uiBindGroupLayout != null) Runtime.Api.BindGroupLayoutRelease(_uiBindGroupLayout);
+        if (_uiSampler != null) Runtime.Api.SamplerRelease(_uiSampler);
+        if (_uiVertexBuffer != null) { Runtime.Api.BufferDestroy(_uiVertexBuffer); Runtime.Api.BufferRelease(_uiVertexBuffer); }
+
+        var samplerDescriptor = new SamplerDescriptor { AddressModeU = AddressMode.ClampToEdge, AddressModeV = AddressMode.ClampToEdge, AddressModeW = AddressMode.ClampToEdge, MagFilter = FilterMode.Linear, MinFilter = FilterMode.Linear, MipmapFilter = MipmapFilterMode.Nearest, LodMaxClamp = 1, MaxAnisotropy = 1 };
+        _uiSampler = Runtime.Api.DeviceCreateSampler(Device.UnsafeHandle, in samplerDescriptor);
+        BindGroupLayoutEntry* entries = stackalloc BindGroupLayoutEntry[2];
+        entries[0] = new BindGroupLayoutEntry { Binding = 0, Visibility = ShaderStage.Fragment, Texture = new TextureBindingLayout { SampleType = TextureSampleType.Float, ViewDimension = TextureViewDimension.Dimension2D } };
+        entries[1] = new BindGroupLayoutEntry { Binding = 1, Visibility = ShaderStage.Fragment, Sampler = new SamplerBindingLayout { Type = SamplerBindingType.Filtering } };
+        var layoutDescriptor = new BindGroupLayoutDescriptor { EntryCount = 2, Entries = entries };
+        _uiBindGroupLayout = Runtime.Api.DeviceCreateBindGroupLayout(Device.UnsafeHandle, in layoutDescriptor);
+        BindGroupLayout* layout = _uiBindGroupLayout;
+        var pipelineLayoutDescriptor = new PipelineLayoutDescriptor { BindGroupLayoutCount = 1, BindGroupLayouts = &layout };
+        var pipelineLayout = Runtime.Api.DeviceCreatePipelineLayout(Device.UnsafeHandle, in pipelineLayoutDescriptor);
+        var bindEntries = stackalloc BindGroupEntry[2];
+        bindEntries[0] = new BindGroupEntry { Binding = 0, TextureView = _uiTextureView };
+        bindEntries[1] = new BindGroupEntry { Binding = 1, Sampler = _uiSampler };
+        var bindDescriptor = new BindGroupDescriptor { Layout = _uiBindGroupLayout, EntryCount = 2, Entries = bindEntries };
+        _uiBindGroup = Runtime.Api.DeviceCreateBindGroup(Device.UnsafeHandle, in bindDescriptor);
+
+        string shaderSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shaders", "Ui.wgsl"));
+        nint code = Marshal.StringToHGlobalAnsi(shaderSource), vertexEntry = Marshal.StringToHGlobalAnsi("vs_main"), fragmentEntry = Marshal.StringToHGlobalAnsi("fs_main");
+        try
+        {
+            var wgsl = new ShaderModuleWGSLDescriptor { Code = (byte*)code }; wgsl.Chain.SType = SType.ShaderModuleWgslDescriptor;
+            var shaderDescriptor = new ShaderModuleDescriptor { NextInChain = (ChainedStruct*)&wgsl };
+            _uiShader = Runtime.Api.DeviceCreateShaderModule(Device.UnsafeHandle, in shaderDescriptor);
+            var blend = new BlendState { Color = new BlendComponent { Operation = BlendOperation.Add, SrcFactor = BlendFactor.SrcAlpha, DstFactor = BlendFactor.OneMinusSrcAlpha }, Alpha = new BlendComponent { Operation = BlendOperation.Add, SrcFactor = BlendFactor.One, DstFactor = BlendFactor.OneMinusSrcAlpha } };
+            var target = new ColorTargetState { Format = _surfaceFormat, WriteMask = ColorWriteMask.All, Blend = &blend };
+            var fragment = new FragmentState { Module = _uiShader, EntryPoint = (byte*)fragmentEntry, TargetCount = 1, Targets = &target };
+            VertexAttribute* attrs = stackalloc VertexAttribute[2];
+            attrs[0] = new VertexAttribute { Format = VertexFormat.Float32x2, Offset = 0, ShaderLocation = 0 };
+            attrs[1] = new VertexAttribute { Format = VertexFormat.Float32x2, Offset = 2 * sizeof(float), ShaderLocation = 1 };
+            var vb = new VertexBufferLayout { ArrayStride = 4 * sizeof(float), StepMode = VertexStepMode.Vertex, AttributeCount = 2, Attributes = attrs };
+            var vertex = new VertexState { Module = _uiShader, EntryPoint = (byte*)vertexEntry, BufferCount = 1, Buffers = &vb };
+            var depthStencil = new DepthStencilState { Format = TextureFormat.Depth24Plus, DepthWriteEnabled = false, DepthCompare = CompareFunction.Always, StencilFront = new StencilFaceState { Compare = CompareFunction.Always }, StencilBack = new StencilFaceState { Compare = CompareFunction.Always } };
+            var pipelineDescriptor = new RenderPipelineDescriptor { Layout = pipelineLayout, Vertex = vertex, Primitive = new PrimitiveState { Topology = PrimitiveTopology.TriangleList, FrontFace = FrontFace.Ccw, CullMode = CullMode.None }, DepthStencil = &depthStencil, Multisample = new MultisampleState { Count = 1, Mask = 0xFFFFFFFF }, Fragment = &fragment };
+            _uiPipeline = Runtime.Api.DeviceCreateRenderPipeline(Device.UnsafeHandle, in pipelineDescriptor);
+            float[] vertices = [-1, -1, 0, 1, 1, -1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, -1, 1, 0, 0, -1, -1, 0, 1];
+            var bufferDescriptor = new BufferDescriptor { Size = (ulong)(vertices.Length * sizeof(float)), Usage = BufferUsage.Vertex | BufferUsage.CopyDst };
+            _uiVertexBuffer = Runtime.Api.DeviceCreateBuffer(Device.UnsafeHandle, in bufferDescriptor);
+            fixed (float* data = vertices) Runtime.Api.QueueWriteBuffer((Queue*)Queue.NativeHandle, _uiVertexBuffer, 0, data, (nuint)(vertices.Length * sizeof(float)));
+        }
+        finally { Marshal.FreeHGlobal(code); Marshal.FreeHGlobal(vertexEntry); Marshal.FreeHGlobal(fragmentEntry); }
+        Runtime.Api.PipelineLayoutRelease(pipelineLayout);
+    }
+
+    private void UpdateUiTexture(ReadOnlySpan<byte> pixels)
+    {
+        if (_uiTexture == null) return;
+        fixed (byte* data = pixels)
+        {
+            var destination = new ImageCopyTexture { Texture = _uiTexture };
+            var layout = new TextureDataLayout { BytesPerRow = (uint)(_uiWidth * 4), RowsPerImage = (uint)_uiHeight };
+            var extent = new Extent3D { Width = (uint)_uiWidth, Height = (uint)_uiHeight, DepthOrArrayLayers = 1 };
+            Runtime.Api.QueueWriteTexture((Queue*)Queue.NativeHandle, in destination, data, (nuint)pixels.Length, in layout, in extent);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -523,6 +623,28 @@ public sealed unsafe class WebGpuContext : IDisposable
 
         if (_cubePipeline != null)
             Runtime.Api.RenderPipelineRelease(_cubePipeline);
+        if (_uiPipeline != null)
+            Runtime.Api.RenderPipelineRelease(_uiPipeline);
+        if (_uiShader != null)
+            Runtime.Api.ShaderModuleRelease(_uiShader);
+        if (_uiBindGroup != null)
+            Runtime.Api.BindGroupRelease(_uiBindGroup);
+        if (_uiBindGroupLayout != null)
+            Runtime.Api.BindGroupLayoutRelease(_uiBindGroupLayout);
+        if (_uiSampler != null)
+            Runtime.Api.SamplerRelease(_uiSampler);
+        if (_uiVertexBuffer != null)
+        {
+            Runtime.Api.BufferDestroy(_uiVertexBuffer);
+            Runtime.Api.BufferRelease(_uiVertexBuffer);
+        }
+        if (_uiTextureView != null)
+            Runtime.Api.TextureViewRelease(_uiTextureView);
+        if (_uiTexture != null)
+        {
+            Runtime.Api.TextureDestroy(_uiTexture);
+            Runtime.Api.TextureRelease(_uiTexture);
+        }
         if (_cubeShader != null)
             Runtime.Api.ShaderModuleRelease(_cubeShader);
         if (_cubeVertexBuffer != null)

@@ -11,5 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Engine\Engine.csproj" />
+    <None Include="Ui\**\*.razor" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Ui\**\*.css" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
