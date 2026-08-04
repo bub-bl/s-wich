@@ -5,6 +5,8 @@ public interface IWindow : IDisposable
     string Title { get; }
     int Width { get; }
     int Height { get; }
+    int FramebufferWidth { get; }
+    int FramebufferHeight { get; }
     bool IsClosing { get; }
     nint NativeHandle { get; }
 

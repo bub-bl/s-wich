@@ -54,12 +54,15 @@ public sealed class SdlPlatform : IPlatform
             _window.Closing += () => Closing?.Invoke();
             _window.Update += delta => Updating?.Invoke(delta);
             _window.Render += delta => Rendering?.Invoke(delta);
+            _window.Resize += size => Resized?.Invoke(size.X, size.Y);
             _window.FramebufferResize += size => Resized?.Invoke(size.X, size.Y);
         }
 
         public string Title { get; }
         public int Width => _window.Size.X;
         public int Height => _window.Size.Y;
+        public int FramebufferWidth => _window.FramebufferSize.X;
+        public int FramebufferHeight => _window.FramebufferSize.Y;
         public bool IsClosing => _window.IsClosing;
         public nint NativeHandle => OperatingSystem.IsWindows()
             ? GetWin32Window(_window.Handle)

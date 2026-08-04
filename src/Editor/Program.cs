@@ -18,9 +18,11 @@ internal static class Program
         window.Loaded += () =>
         {
             Console.WriteLine("Crowbar platform initialized.");
-            webGpu = new WebGpuContext(window.NativeHandle, window.Width, window.Height);
+            int framebufferWidth = window.FramebufferWidth > 0 ? window.FramebufferWidth : window.Width;
+            int framebufferHeight = window.FramebufferHeight > 0 ? window.FramebufferHeight : window.Height;
+            webGpu = new WebGpuContext(window.NativeHandle, framebufferWidth, framebufferHeight);
         };
-        window.Updating += _ => { };
+        window.Updating += delta => webGpu?.Update(delta);
         window.Rendering += delta => webGpu?.Render(delta);
         window.Resized += (width, height) => webGpu?.Resize(width, height);
         window.Closing += () =>
