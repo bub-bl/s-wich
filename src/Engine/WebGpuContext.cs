@@ -174,7 +174,7 @@ public sealed unsafe class WebGpuContext : IDisposable
         if (IsKeyDown(0x44)) movement += right;   // D
         if (IsKeyDown(0x51)) movement -= right;   // Q
         if (IsKeyDown(0x20)) movement += Vector3.UnitY; // Espace
-        if (IsKeyDown(0x11)) movement -= Vector3.UnitY; // Ctrl
+        if (IsKeyDown(0x45)) movement -= Vector3.UnitY; // E
 
         if (movement.LengthSquared() > 0f)
             _cameraPosition += Vector3.Normalize(movement) * (2.5f * delta);
