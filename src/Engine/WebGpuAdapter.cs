@@ -9,6 +9,38 @@ public sealed class WebGpuAdapter : IDisposable
     private readonly WebGpuRuntime _runtime;
     private nint _nativeHandle;
 
+    public WebGpuAdapter(WebGpuRuntime runtime)
+    {
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+
+        var adapterOptions = new RequestAdapterOptions
+        {
+            BackendType = BackendType.Undefined,
+            PowerPreference = PowerPreference.HighPerformance
+        };
+
+        var callback = PfnRequestAdapterCallback.From((status, adapter, msgPtr, _) =>
+        {
+            if (status is RequestAdapterStatus.Success)
+            {
+                _nativeHandle = (nint)adapter;
+                Console.WriteLine("WebGPU adapter selected.");
+                return;
+            }
+
+            string message = Marshal.PtrToStringUTF8((IntPtr)msgPtr) ?? "Unknown adapter error.";
+            Console.WriteLine($"WebGPU adapter selection failed: {message}");
+        });
+
+        unsafe
+        {
+            _runtime.Api.InstanceRequestAdapter(_runtime.Instance.UnsafeHandle, in adapterOptions, callback, null);
+        }
+
+        if (_nativeHandle == 0)
+            throw new InvalidOperationException("WebGPU did not return an adapter.");
+    }
+
     public WebGpuAdapter(WebGpuRuntime runtime, WebGpuSurface surface)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));

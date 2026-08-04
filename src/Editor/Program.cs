@@ -1,27 +1,33 @@
-﻿using Avalonia;
+using Crowbar.Engine.Platform;
+using Crowbar.Engine;
 
 namespace Crowbar.Editor;
 
 internal static class Program
 {
-    // Initialization code. Don't use any Avalonia, third-party APIs or any
-    // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
-    // yet and stuff might break.
-    [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+    public static void Main()
+    {
+        using IPlatform platform = new SdlPlatform();
+        using IWindow window = platform.CreateWindow(new WindowOptions(
+            Title: "Crowbar",
+            Width: 1280,
+            Height: 720));
 
-    // Avalonia configuration, don't remove; also used by visual designer.
-    private static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
-            .UsePlatformDetect()
-            .With(new Win32PlatformOptions
-            {
-                RenderingMode = [Win32RenderingMode.Vulkan, Win32RenderingMode.Software]
-            })
-#if DEBUG
-            .WithDeveloperTools()
-#endif
-            .WithInterFont()
-            .LogToTrace();
+        WebGpuContext? webGpu = null;
+
+        window.Loaded += () =>
+        {
+            Console.WriteLine("Crowbar platform initialized.");
+            webGpu = new WebGpuContext(window.NativeHandle, window.Width, window.Height);
+        };
+        window.Updating += _ => { };
+        window.Rendering += delta => webGpu?.Render(delta);
+        window.Resized += (width, height) => webGpu?.Resize(width, height);
+        window.Closing += () =>
+        {
+            webGpu?.Dispose();
+            Console.WriteLine("Crowbar shutting down.");
+        };
+        window.Run();
+    }
 }

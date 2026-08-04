@@ -25,16 +25,13 @@ public sealed class WebGpuRuntime : IDisposable
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        unsafe
+        var callback = PfnErrorCallback.From((type, msgPtr, _) =>
         {
-            var callback = PfnErrorCallback.From((type, msgPtr, _) =>
-            {
-                var message = Marshal.PtrToStringUTF8((IntPtr)msgPtr);
-                Console.WriteLine($"WGPU Unhandled Error: {type} -> {message}");
-            });
+            var message = Marshal.PtrToStringUTF8((IntPtr)msgPtr);
+            Console.WriteLine($"WGPU Unhandled Error: {type} -> {message}");
+        });
 
-            Api.DeviceSetUncapturedErrorCallback(device.UnsafeHandle, callback, null);
-        }
+        Api.DeviceSetUncapturedErrorCallback(device.UnsafeHandle, callback, null);
     }
 
     public void Dispose()

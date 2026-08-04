@@ -5,17 +5,15 @@
     <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Crowbar.Engine</AssemblyName>
     <RootNamespace>Crowbar.Engine</RootNamespace>
+    <AllowUnsafeBlock>true</AllowUnsafeBlock>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="Shaders\**\*.wgsl" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Build-time telemetry is optional and can fail in restricted environments. -->
+    <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.WebGPU" Version="2.23.0" />
     <PackageReference Include="Silk.NET.WebGPU.Extensions.WGPU" Version="2.23.0" />
     <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" Version="2.23.0" />

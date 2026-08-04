@@ -7,5 +7,5 @@ public sealed class SceneFile : ResourceFile
 {
     public Guid Id { get; init; }
     public required SceneFileMetadata Metadata { get; init; }
-    public List<GameObject> GameObjects { get; private set; } = [];
+    // public List<GameObject> GameObjects { get; private set; } = [];
 }
