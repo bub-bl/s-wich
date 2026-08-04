@@ -1,5 +1,6 @@
 using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
+using System.Runtime.InteropServices;
 
 namespace Crowbar.Engine;
 
@@ -15,6 +16,8 @@ public sealed unsafe class WebGpuContext : IDisposable
     public WebGpuQueue Queue { get; }
 
     private Surface* _surface;
+    private ShaderModule* _triangleShader;
+    private RenderPipeline* _trianglePipeline;
     private TextureFormat _surfaceFormat;
     private bool _hasPresentedFrame;
     private bool _disposed;
@@ -51,6 +54,7 @@ public sealed unsafe class WebGpuContext : IDisposable
                 _surfaceFormat = TextureFormat.Bgra8Unorm;
 
             ConfigureSurface(width, height);
+            CreateTrianglePipeline();
             Console.WriteLine("WebGPU device initialized.");
         }
         catch
@@ -87,6 +91,8 @@ public sealed unsafe class WebGpuContext : IDisposable
         };
 
         WebGpuRenderPassEncoder pass = Runtime.BeginRenderPass(encoder, passDescription);
+        Runtime.SetPipeline(pass, WebGpuRenderPipeline.FromNative((nint)_trianglePipeline));
+        Runtime.Draw(pass, 3);
         Runtime.EndRenderPass(pass);
         WebGpuCommandBuffer commandBuffer = Runtime.FinishCommandEncoder(encoder);
         Runtime.Submit(Queue, commandBuffer);
@@ -125,11 +131,112 @@ public sealed unsafe class WebGpuContext : IDisposable
         Runtime.Api.SurfaceConfigure(_surface, in configuration);
     }
 
+    private void CreateTrianglePipeline()
+    {
+        const string shaderSource = """
+            struct VertexOutput {
+                @builtin(position) position: vec4f,
+                @location(0) color: vec3f,
+            }
+
+            @vertex
+            fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
+                var positions = array<vec2f, 3>(
+                    vec2f(0.0, 0.75),
+                    vec2f(-0.75, -0.75),
+                    vec2f(0.75, -0.75)
+                );
+                var colors = array<vec3f, 3>(
+                    vec3f(1.0, 0.2, 0.2),
+                    vec3f(0.2, 1.0, 0.3),
+                    vec3f(0.2, 0.4, 1.0)
+                );
+
+                var output: VertexOutput;
+                output.position = vec4f(positions[index], 0.0, 1.0);
+                output.color = colors[index];
+                return output;
+            }
+
+            @fragment
+            fn fs_main(input: VertexOutput) -> @location(0) vec4f {
+                return vec4f(input.color, 1.0);
+            }
+            """;
+
+        nint shaderCode = Marshal.StringToHGlobalAnsi(shaderSource);
+        nint vertexEntry = Marshal.StringToHGlobalAnsi("vs_main");
+        nint fragmentEntry = Marshal.StringToHGlobalAnsi("fs_main");
+        try
+        {
+            var wgslDescriptor = new ShaderModuleWGSLDescriptor
+            {
+                Code = (byte*)shaderCode
+            };
+            wgslDescriptor.Chain.SType = SType.ShaderModuleWgslDescriptor;
+
+            var shaderDescriptor = new ShaderModuleDescriptor
+            {
+                NextInChain = (ChainedStruct*)&wgslDescriptor
+            };
+            _triangleShader = Runtime.Api.DeviceCreateShaderModule(Device.UnsafeHandle, in shaderDescriptor);
+            if (_triangleShader == null)
+                throw new InvalidOperationException("WebGPU could not create the triangle shader.");
+
+            var colorTarget = new ColorTargetState
+            {
+                Format = _surfaceFormat,
+                WriteMask = ColorWriteMask.All
+            };
+            var fragment = new FragmentState
+            {
+                Module = _triangleShader,
+                EntryPoint = (byte*)fragmentEntry,
+                TargetCount = 1,
+                Targets = &colorTarget
+            };
+            var vertex = new VertexState
+            {
+                Module = _triangleShader,
+                EntryPoint = (byte*)vertexEntry,
+                BufferCount = 0,
+                Buffers = null
+            };
+            var primitive = new PrimitiveState
+            {
+                Topology = PrimitiveTopology.TriangleList,
+                FrontFace = FrontFace.Ccw,
+                CullMode = CullMode.None
+            };
+            var pipelineDescriptor = new RenderPipelineDescriptor
+            {
+                Vertex = vertex,
+                Primitive = primitive,
+                Multisample = new MultisampleState { Count = 1, Mask = 0xFFFFFFFF },
+                Fragment = &fragment
+            };
+
+            _trianglePipeline = Runtime.Api.DeviceCreateRenderPipeline(Device.UnsafeHandle, in pipelineDescriptor);
+            if (_trianglePipeline == null)
+                throw new InvalidOperationException("WebGPU could not create the triangle pipeline.");
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(shaderCode);
+            Marshal.FreeHGlobal(vertexEntry);
+            Marshal.FreeHGlobal(fragmentEntry);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
             return;
 
+        if (_trianglePipeline != null)
+            Runtime.Api.RenderPipelineRelease(_trianglePipeline);
+        if (_triangleShader != null)
+            Runtime.Api.ShaderModuleRelease(_triangleShader);
         Device.Dispose();
         Adapter.Dispose();
         if (_surface != null)
