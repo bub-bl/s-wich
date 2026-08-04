@@ -152,6 +152,14 @@ public sealed unsafe class WebGpuContext : IDisposable
         if (_disposed)
             return;
 
+        // GetAsyncKeyState is process-independent, so explicitly reject input
+        // while another window is in the foreground.
+        if (!IsWindowFocused())
+        {
+            _mouseLookActive = false;
+            return;
+        }
+
         float delta = Math.Clamp((float)deltaTime, 0f, 0.1f);
         UpdateMouseLook();
 
@@ -298,8 +306,13 @@ public sealed unsafe class WebGpuContext : IDisposable
 
     private static bool IsKeyDown(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
 
+    private bool IsWindowFocused() => GetForegroundWindow() == _windowHandle;
+
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
