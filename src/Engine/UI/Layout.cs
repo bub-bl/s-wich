@@ -10,7 +10,7 @@ public sealed class YogaLayoutEngine
     public void Layout(Panel root, float width, float height, StyleSheet? sheet = null)
     {
         LayoutPasses++;
-        ApplyStyles(root, sheet);
+        ApplyStyles(root, sheet, null);
         var yogaRoot = BuildYogaTree(root, new YogaConfig());
         yogaRoot.Width = root.ComputedStyle.Width ?? width;
         yogaRoot.Height = root.ComputedStyle.Height ?? height;
@@ -19,10 +19,15 @@ public sealed class YogaLayoutEngine
         root.ClearDirty();
     }
 
-    private static void ApplyStyles(Panel panel, StyleSheet? sheet)
+    private static void ApplyStyles(Panel panel, StyleSheet? sheet, ComputedStyle? inherited)
     {
         panel.ComputedStyle = sheet?.Compute(panel) ?? new ComputedStyle();
-        foreach (var child in panel.Children) ApplyStyles(child, sheet);
+        if (inherited is not null)
+        {
+            if (panel.ComputedStyle.Color == UiColor.White) panel.ComputedStyle.Color = inherited.Color;
+            panel.ComputedStyle.Opacity *= inherited.Opacity;
+        }
+        foreach (var child in panel.Children) ApplyStyles(child, sheet, panel.ComputedStyle);
     }
 
     private static YogaNode BuildYogaTree(Panel panel, YogaConfig config)
@@ -46,6 +51,14 @@ public sealed class YogaLayoutEngine
             Overflow = style.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ? YogaOverflow.Hidden : YogaOverflow.Visible,
         };
         node.Data = panel;
+        if (panel.TagName.Equals("text", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(panel.Text))
+        {
+            node.SetMeasureFunction((_, width, _, _, _) => new YogaSize
+            {
+                width = Math.Min(width > 0 ? width : float.MaxValue, panel.Text.Length * panel.ComputedStyle.FontSize * 0.56f),
+                height = panel.ComputedStyle.FontSize * 1.25f
+            });
+        }
         foreach (var child in panel.Children) node.AddChild(BuildYogaTree(child, config));
         return node;
     }

@@ -57,6 +57,7 @@ public sealed unsafe class WebGpuContext : IDisposable
     private BindGroup* _uiBindGroup;
     private int _uiWidth;
     private int _uiHeight;
+    private bool _uiTextureDirty = true;
 
     public WebGpuContext(nint windowHandle, int width, int height)
     {
@@ -147,8 +148,13 @@ public sealed unsafe class WebGpuContext : IDisposable
         Runtime.Draw(pass, CubeVertexCount);
         if (Ui is not null && _uiPipeline != null && _uiBindGroup != null)
         {
+            bool uiChanged = _uiTextureDirty || Ui.Renderer.IsDirty;
             var pixels = Ui.Render();
-            if (pixels.Length > 0) UpdateUiTexture(pixels.Span);
+            if (uiChanged && pixels.Length > 0)
+            {
+                UpdateUiTexture(pixels.Span);
+                _uiTextureDirty = false;
+            }
             Runtime.SetPipeline(pass, WebGpuRenderPipeline.FromNative((nint)_uiPipeline));
             Runtime.SetBindGroup(pass, WebGpuBindGroup.FromNative((nint)_uiBindGroup), 0);
             Runtime.SetVertexBuffer(pass, WebGpuBuffer.FromNative((nint)_uiVertexBuffer), (ulong)(6 * 4 * sizeof(float)));
@@ -553,6 +559,7 @@ public sealed unsafe class WebGpuContext : IDisposable
         _uiTexture = Runtime.Api.DeviceCreateTexture(Device.UnsafeHandle, in textureDescriptor);
         _uiTextureView = Runtime.Api.TextureCreateView(_uiTexture, null);
         _uiWidth = Math.Max(1, width); _uiHeight = Math.Max(1, height);
+        _uiTextureDirty = true;
 
         if (_uiPipeline != null) Runtime.Api.RenderPipelineRelease(_uiPipeline);
         if (_uiShader != null) Runtime.Api.ShaderModuleRelease(_uiShader);

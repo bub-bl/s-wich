@@ -55,10 +55,17 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
         if (panel.TagName == "text" && !string.IsNullOrEmpty(panel.Text))
         {
             using var paint = new SKPaint { Color = new SKColor(panel.ComputedStyle.Color.R, panel.ComputedStyle.Color.G, panel.ComputedStyle.Color.B, alpha), IsAntialias = true };
-            using var font = new SKFont { Size = 16 };
+            using var font = new SKFont { Size = panel.ComputedStyle.FontSize };
             canvas.DrawText(panel.Text, rect.Left, rect.Top + 16, SKTextAlign.Left, font, paint);
         }
-        foreach (var child in panel.Children) DrawPanel(canvas, child, ox, oy, opacity);
+        if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase))
+        {
+            canvas.Save();
+            canvas.ClipRect(rect);
+            foreach (var child in panel.Children) DrawPanel(canvas, child, ox, oy, opacity);
+            canvas.Restore();
+        }
+        else foreach (var child in panel.Children) DrawPanel(canvas, child, ox, oy, opacity);
     }
 
     public void MarkDirty() => _dirty = true;

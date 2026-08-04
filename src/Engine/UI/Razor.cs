@@ -54,7 +54,9 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         if (generatedType is null) throw new InvalidOperationException("Razor output did not contain a component type.");
         var template = (RazorTemplateBase)Activator.CreateInstance(generatedType)!;
         var markup = template.RenderMarkupAsync().GetAwaiter().GetResult();
-        return HtmlPanelParser.Parse(markup, template);
+        var root = HtmlPanelParser.Parse(markup, template);
+        template.MarkBuilt(null);
+        return root;
     }
 }
 
@@ -74,7 +76,15 @@ internal static class HtmlPanelParser
     {
         if (node is XText text && !string.IsNullOrWhiteSpace(text.Value)) { parent.AddChild(new Panel { TagName = "text", Text = text.Value }); return; }
         if (node is not XElement element) return;
-        var panel = new Panel { TagName = element.Name.LocalName };
+        var panel = element.Name.LocalName.ToLowerInvariant() switch
+        {
+            "button" => new Button(),
+            "input" => new TextInput(),
+            "img" or "image" => new Image(),
+            "label" or "span" => new Label(),
+            _ => new Panel()
+        };
+        panel.TagName = element.Name.LocalName;
         foreach (var attribute in element.Attributes())
         {
             if (attribute.Name == "class") foreach (var c in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)) panel.AddClass(c);

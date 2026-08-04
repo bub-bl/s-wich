@@ -20,5 +20,22 @@ public static class UiSmokeTests
         var pixels = renderer.Render(root);
         if (pixels.Length != 320 * 200 * 4) throw new InvalidOperationException("UI raster size is invalid.");
         if (layout.LayoutPasses != 1) throw new InvalidOperationException("Unexpected UI layout pass count.");
+        var button = new Button("Click");
+        button.SetInlineStyle("width", "80px");
+        button.SetInlineStyle("height", "32px");
+        var clicked = false;
+        button.Clicked += _ => clicked = true;
+        root.AddChild(button);
+        root.SetViewport(320, 200);
+        renderer.MarkDirty();
+        renderer.Render(root);
+        var input = new UiSystem();
+        input.Screen.SetViewport(320, 200);
+        input.Screen.AddChild(button);
+        input.Renderer.Resize(320, 200);
+        input.Render();
+        input.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+        if (!clicked) throw new InvalidOperationException("Button input routing failed.");
+        input.Dispose();
     }
 }

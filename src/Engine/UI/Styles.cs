@@ -22,6 +22,7 @@ public sealed class ComputedStyle
     public float Padding { get; set; }
     public float Opacity { get; set; } = 1;
     public float BorderRadius { get; set; }
+    public float FontSize { get; set; } = 16;
     public UiColor BackgroundColor { get; set; } = UiColor.Transparent;
     public UiColor Color { get; set; } = UiColor.White;
 
@@ -133,6 +134,7 @@ public sealed class StyleSheet
             else if (key.Equals("flex-grow", StringComparison.OrdinalIgnoreCase)) style.FlexGrow = ParseFloat(value);
             else if (key.Equals("opacity", StringComparison.OrdinalIgnoreCase)) style.Opacity = ParseFloat(value);
             else if (key.Equals("border-radius", StringComparison.OrdinalIgnoreCase)) style.BorderRadius = ParseLength(value) ?? 0;
+            else if (key.Equals("font-size", StringComparison.OrdinalIgnoreCase)) style.FontSize = ParseLength(value) ?? 16;
             else if (key.Equals("background-color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var bg)) style.BackgroundColor = bg;
             else if (key.Equals("color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var fg)) style.Color = fg;
         }

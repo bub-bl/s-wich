@@ -23,6 +23,7 @@ internal static class Program
         using var ui = new UiSystem();
         ui.LoadRazor(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.razor")), "Demo");
         ui.LoadStyles(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.css")));
+        ui.WatchFiles(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.razor"), Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.css"), "Demo");
 
         window.Loaded += () =>
         {
@@ -33,7 +34,7 @@ internal static class Program
             ui.SetViewport(framebufferWidth, framebufferHeight);
             ui.Render();
         };
-        window.Updating += delta => webGpu?.Update(delta);
+        window.Updating += delta => { ui.Update(); webGpu?.Update(delta); };
         window.Rendering += delta => webGpu?.Render(delta);
         window.Resized += (width, height) => { webGpu?.Resize(width, height); ui.SetViewport(width, height); ui.Render(); };
         window.Closing += () =>

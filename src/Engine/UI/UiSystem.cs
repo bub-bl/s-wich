@@ -1,6 +1,6 @@
 namespace Crowbar.Engine.UI;
 
-public sealed class UiSystem : IDisposable
+public sealed partial class UiSystem : IDisposable
 {
     public ScreenPanel Screen { get; } = new();
     public SkiaUiRenderer Renderer { get; } = new();
@@ -20,6 +20,10 @@ public sealed class UiSystem : IDisposable
 
     public void LoadStyles(string css) { StyleSheet = Crowbar.Engine.UI.StyleSheet.Parse(css); Renderer.StyleSheet = StyleSheet; Renderer.MarkDirty(); }
 
-    public ReadOnlyMemory<byte> Render() => Renderer.Render(Screen);
-    public void Dispose() => Renderer.Dispose();
+    public ReadOnlyMemory<byte> Render()
+    {
+        if (Screen.LayoutDirty) Renderer.MarkDirty();
+        return Renderer.Render(Screen);
+    }
+    public void Dispose() { StopWatching(); Renderer.Dispose(); }
 }
