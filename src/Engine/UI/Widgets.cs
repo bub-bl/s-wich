@@ -24,6 +24,13 @@ public class TextInput : Panel
     public string Value { get; private set; } = string.Empty;
     public event Action<string>? ValueChanged;
     public void SetValue(string value) { Value = value; ValueChanged?.Invoke(value); Invalidate(); }
+    internal void HandleKey(int keyCode, bool isDown)
+    {
+        if (!isDown) return;
+        if (keyCode == 0x08 && Value.Length > 0) SetValue(Value[..^1]);
+        else if (keyCode == 0x20) SetValue(Value + " ");
+        else if (keyCode is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A) SetValue(Value + (char)keyCode);
+    }
 }
 
 public class Image : Panel

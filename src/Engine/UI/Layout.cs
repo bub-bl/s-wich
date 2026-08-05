@@ -59,7 +59,19 @@ public sealed class YogaLayoutEngine
                 height = panel.ComputedStyle.FontSize * 1.25f
             });
         }
-        foreach (var child in panel.Children) node.AddChild(BuildYogaTree(child, config));
+        for (var i = 0; i < panel.Children.Count; i++)
+            node.AddChild(BuildYogaTree(panel.Children[i], config, style, i));
+        return node;
+    }
+
+    private static YogaNode BuildYogaTree(Panel panel, YogaConfig config, ComputedStyle? parentStyle, int childIndex)
+    {
+        var node = BuildYogaTree(panel, config);
+        if (parentStyle is not null && childIndex > 0 && parentStyle.Gap > 0)
+        {
+            if (parentStyle.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase)) node.MarginLeft = parentStyle.Gap;
+            else node.MarginTop = parentStyle.Gap;
+        }
         return node;
     }
 

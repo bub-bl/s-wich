@@ -52,11 +52,12 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
             using var paint = new SKPaint { Color = new SKColor(background.R, background.G, background.B, (byte)(background.A * alpha / 255)), IsAntialias = true };
             canvas.DrawRoundRect(rect, panel.ComputedStyle.BorderRadius, panel.ComputedStyle.BorderRadius, paint);
         }
-        if (panel.TagName == "text" && !string.IsNullOrEmpty(panel.Text))
+        var text = panel.TagName == "text" ? panel.Text : panel is TextInput input ? input.Value : string.Empty;
+        if (!string.IsNullOrEmpty(text))
         {
             using var paint = new SKPaint { Color = new SKColor(panel.ComputedStyle.Color.R, panel.ComputedStyle.Color.G, panel.ComputedStyle.Color.B, alpha), IsAntialias = true };
             using var font = new SKFont { Size = panel.ComputedStyle.FontSize };
-            canvas.DrawText(panel.Text, rect.Left, rect.Top + 16, SKTextAlign.Left, font, paint);
+            canvas.DrawText(text, rect.Left, rect.Top + panel.ComputedStyle.FontSize + 2, SKTextAlign.Left, font, paint);
         }
         if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase))
         {

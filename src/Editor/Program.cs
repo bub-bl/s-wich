@@ -24,6 +24,14 @@ internal static class Program
         ui.LoadRazor(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.razor")), "Demo");
         ui.LoadStyles(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.css")));
         ui.WatchFiles(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.razor"), Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.css"), "Demo");
+        window.PointerMoved += e => ui.ProcessPointerMove(e.X, e.Y);
+        window.PointerButtonChanged += e =>
+        {
+            if (e.IsDown) ui.ProcessPointerDown(e.X, e.Y, (int)e.Button);
+            else ui.ProcessPointerUp(e.X, e.Y, (int)e.Button);
+        };
+        window.PointerWheelChanged += e => ui.ProcessPointerWheel(e.X, e.Y, e.DeltaX, e.DeltaY);
+        window.KeyChanged += e => ui.ProcessKey(e.KeyCode, e.IsDown, e.IsRepeat);
 
         window.Loaded += () =>
         {

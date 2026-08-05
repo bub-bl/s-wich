@@ -15,6 +15,10 @@ public interface IWindow : IDisposable
     event Action<double>? Updating;
     event Action<double>? Rendering;
     event Action<int, int>? Resized;
+    event Action<PointerMoveEvent>? PointerMoved;
+    event Action<PointerButtonEvent>? PointerButtonChanged;
+    event Action<PointerWheelEvent>? PointerWheelChanged;
+    event Action<KeyEvent>? KeyChanged;
 
     void Run();
     void Close();

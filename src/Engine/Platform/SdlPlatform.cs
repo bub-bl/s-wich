@@ -36,6 +36,7 @@ public sealed class SdlPlatform : IPlatform
     private sealed class SilkWindow : IWindow
     {
         private readonly Silk.NET.Windowing.IWindow _window;
+        private readonly IWindowInputSource _input;
         private bool _disposed;
 
         public SilkWindow(WindowOptions options)
@@ -49,10 +50,15 @@ public sealed class SdlPlatform : IPlatform
             windowOptions.ShouldSwapAutomatically = false;
             _window = Silk.NET.Windowing.Window.Create(windowOptions);
             _window.IsVisible = true;
+            _input = OperatingSystem.IsWindows() ? new WindowsWindowInputSource(() => NativeHandle) : new NullWindowInputSource();
+            _input.PointerMoved += e => PointerMoved?.Invoke(e);
+            _input.PointerButtonChanged += e => PointerButtonChanged?.Invoke(e);
+            _input.PointerWheelChanged += e => PointerWheelChanged?.Invoke(e);
+            _input.KeyChanged += e => KeyChanged?.Invoke(e);
 
             _window.Load += () => Loaded?.Invoke();
             _window.Closing += () => Closing?.Invoke();
-            _window.Update += delta => Updating?.Invoke(delta);
+            _window.Update += delta => { _input.Update(); Updating?.Invoke(delta); };
             _window.Render += delta => Rendering?.Invoke(delta);
             _window.Resize += size => Resized?.Invoke(size.X, size.Y);
             _window.FramebufferResize += size => Resized?.Invoke(size.X, size.Y);
@@ -73,6 +79,10 @@ public sealed class SdlPlatform : IPlatform
         public event Action<double>? Updating;
         public event Action<double>? Rendering;
         public event Action<int, int>? Resized;
+        public event Action<PointerMoveEvent>? PointerMoved;
+        public event Action<PointerButtonEvent>? PointerButtonChanged;
+        public event Action<PointerWheelEvent>? PointerWheelChanged;
+        public event Action<KeyEvent>? KeyChanged;
 
         public void Run()
         {
@@ -88,6 +98,7 @@ public sealed class SdlPlatform : IPlatform
                 return;
 
             _window.Dispose();
+            _input.Dispose();
             _disposed = true;
         }
 
