@@ -22,9 +22,13 @@ internal static class Program
 
         WebGpuContext? webGpu = null;
         using var ui = new UiSystem();
-        ui.LoadRazor(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.razor")), "Demo");
-        ui.LoadStyles(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.css")));
-        ui.WatchFiles(Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.razor"), Path.Combine(AppContext.BaseDirectory, "Ui", "Demo.css"), "Demo");
+        var razorPath = ResolveUiFile("Demo.razor");
+        var stylePath = ResolveUiFile("Demo.css");
+        Console.WriteLine($"Razor UI source: {razorPath}");
+        Console.WriteLine($"Razor UI styles: {stylePath}");
+        ui.LoadRazor(File.ReadAllText(razorPath), "Demo");
+        ui.LoadStyles(File.ReadAllText(stylePath));
+        ui.WatchFiles(razorPath, stylePath, "Demo");
         window.PointerMoved += e => ui.ProcessPointerMove(e.X, e.Y);
         window.PointerButtonChanged += e =>
         {
@@ -52,5 +56,12 @@ internal static class Program
             Console.WriteLine("Crowbar shutting down.");
         };
         window.Run();
+    }
+
+    private static string ResolveUiFile(string fileName)
+    {
+        var outputPath = Path.Combine(AppContext.BaseDirectory, "Ui", fileName);
+        var sourcePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Editor", "Ui", fileName));
+        return File.Exists(sourcePath) ? sourcePath : outputPath;
     }
 }
