@@ -46,16 +46,22 @@ public static class UiSmokeTests
         input.Dispose();
 
         TestReactiveRazor();
+        TestRazorDirectivesAndLifecycle();
     }
 
     private static void TestReactiveRazor()
     {
         using var ui = new UiSystem();
-        ui.RegisterRazorComponent("CounterLabel", "<span>Child component</span>", "CounterLabel");
+        ui.RegisterRazorComponent("CounterLabel", @"
+<span>@Label</span>
+@code {
+    [Crowbar.Engine.UI.Parameter] public string Label { get; set; } = string.Empty;
+}
+", "CounterLabel");
         ui.LoadRazor(@"
 <div class=""root"">
   <button @onclick=""Increment"">Count: @count</button>
-  <CounterLabel />
+  <CounterLabel Label=""Child component"" />
   @if (count > 0) { <label>Visible</label> }
   @foreach (var item in items) { <span>@item</span> }
   <input value=""first"" @onchange=""Changed"" @bind-value=""name"" />
@@ -103,4 +109,51 @@ public static class UiSmokeTests
         }
         return null;
     }
+
+    private static void TestRazorDirectivesAndLifecycle()
+    {
+        using var ui = new UiSystem();
+        ui.LoadRazor(@"
+@inherits Crowbar.Engine.UI.RazorSmokeBase
+@implements Crowbar.Engine.UI.IRazorSmokeContract
+@{ var inline = ""inline""; }
+<div><span>@inline</span><span>@BuildVersion</span></div>
+@code {
+    protected override void OnInitialized() { base.OnInitialized(); }
+    protected override void OnAfterRender(bool firstRender) { AfterRenderCount++; }
+}
+", "DirectiveDemo");
+        ui.Screen.SetViewport(320, 120);
+        ui.Renderer.Resize(320, 120);
+        ui.Render();
+        if (ui.Content is not RazorSmokeBase component || component is not IRazorSmokeContract)
+            throw new InvalidOperationException("Razor @inherits/@implements failed.");
+        if (component.InitializedCount != 1 || component.ParametersCount != 1 || component.AfterRenderCount != 1)
+            throw new InvalidOperationException("Razor lifecycle initial ordering failed.");
+
+        component.AllowRender = false;
+        component.BuildVersion = 1;
+        ui.Update();
+        if (component.AfterRenderCount != 1) throw new InvalidOperationException("Razor ShouldRender did not suppress rendering.");
+        component.AllowRender = true;
+        component.StateHasChanged();
+        ui.Update();
+        if (component.AfterRenderCount != 2 || component.InitializedCount != 1)
+            throw new InvalidOperationException("Razor BuildHash/lifecycle rerender failed.");
+    }
+}
+
+public interface IRazorSmokeContract { }
+
+public abstract class RazorSmokeBase : RazorTemplateBase
+{
+    public int InitializedCount { get; protected set; }
+    public int ParametersCount { get; protected set; }
+    public int AfterRenderCount { get; protected set; }
+    public bool AllowRender { get; set; } = true;
+    public int BuildVersion { get; set; }
+    protected override bool ShouldRender() => AllowRender;
+    protected override int BuildHash() => BuildVersion;
+    protected override void OnInitialized() => InitializedCount++;
+    protected override void OnParametersSet() => ParametersCount++;
 }

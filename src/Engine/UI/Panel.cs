@@ -121,6 +121,7 @@ public class Panel
 public abstract class PanelComponent : Panel
 {
     private int _lastBuildHash;
+    private int? _skippedBuildHash;
     private bool _built;
     public bool StateDirty { get; private set; } = true;
     public string? RazorFile { get; internal set; }
@@ -128,17 +129,27 @@ public abstract class PanelComponent : Panel
     internal Action? StateChanged { get; set; }
 
     protected virtual int BuildHash() => 0;
+    protected virtual bool ShouldRender() => true;
     protected virtual void OnTreeFirstBuilt() { }
     protected virtual void OnTreeBuilt() { }
-    public void StateHasChanged() { StateDirty = true; Invalidate(); StateChanged?.Invoke(); }
-    internal bool NeedsBuild() => StateDirty || !_built || _lastBuildHash != BuildHash();
-    internal void MarkBuilt(StyleSheet? styleSheet)
+    public void StateHasChanged() { _skippedBuildHash = null; StateDirty = true; Invalidate(); StateChanged?.Invoke(); }
+    internal bool NeedsBuild()
     {
+        var hash = BuildHash();
+        if (!StateDirty && _skippedBuildHash == hash) return false;
+        return StateDirty || !_built || _lastBuildHash != hash;
+    }
+    internal bool CanRender() => ShouldRender();
+    internal void MarkRenderSkipped() { _skippedBuildHash = BuildHash(); _lastBuildHash = _skippedBuildHash.Value; StateDirty = false; }
+    internal bool MarkBuilt(StyleSheet? styleSheet)
+    {
+        var firstRender = !_built;
         StyleSheet = styleSheet;
         _lastBuildHash = BuildHash();
         StateDirty = false;
-        if (!_built) { _built = true; OnTreeFirstBuilt(); }
+        if (firstRender) { _built = true; OnTreeFirstBuilt(); }
         OnTreeBuilt();
+        return firstRender;
     }
 }
 

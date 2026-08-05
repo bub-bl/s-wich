@@ -40,7 +40,13 @@ public sealed partial class UiSystem : IDisposable
     }
     internal void RenderRazorIfNeeded()
     {
-        if (!_razorRenderPending || _razorRoot is null) return;
+        if (_razorRoot is null || (!_razorRenderPending && !_razorRoot.NeedsBuild())) return;
+        if (!_razorRoot.CanRender())
+        {
+            _razorRoot.MarkRenderSkipped();
+            _razorRenderPending = false;
+            return;
+        }
         _razorRenderPending = false;
         var old = Content;
         Content = (_razorFactory ?? new RazorComponentFactory(_razorComponents)).BuildTree(_razorRoot);
