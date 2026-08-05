@@ -21,7 +21,7 @@ public sealed class YogaLayoutEngine
 
     private static void ApplyStyles(Panel panel, StyleSheet? sheet, ComputedStyle? inherited)
     {
-        panel.ComputedStyle = sheet?.Compute(panel) ?? new ComputedStyle();
+        panel.ApplyComputedStyle(sheet?.Compute(panel) ?? new ComputedStyle());
         if (inherited is not null)
         {
             if (panel.ComputedStyle.Color == UiColor.White) panel.ComputedStyle.Color = inherited.Color;

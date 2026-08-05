@@ -7,6 +7,11 @@ public class Panel
 {
     private readonly List<Panel> _children = [];
     private readonly HashSet<string> _classes = new(StringComparer.OrdinalIgnoreCase);
+    private ComputedStyle? _styleTarget;
+    private ComputedStyle? _styleFrom;
+    private float _styleAnimationTime;
+    private bool _styleAnimating;
+    private bool _hasComputedStyle;
     internal bool LayoutDirty { get; private set; } = true;
 
     public Panel? Parent { get; private set; }
@@ -39,6 +44,60 @@ public class Panel
     public void ClearChildren() { foreach (var child in _children) child.Parent = null; _children.Clear(); Invalidate(); }
     public void SetInlineStyle(string key, string value) { InlineStyle[key] = value; Invalidate(); }
     public void Invalidate() { LayoutDirty = true; Parent?.Invalidate(); }
+    internal void ApplyComputedStyle(ComputedStyle target)
+    {
+        if (!_hasComputedStyle)
+        {
+            ComputedStyle = target;
+            _styleTarget = target.Clone();
+            _hasComputedStyle = true;
+            return;
+        }
+
+        if (_styleTarget is not null && StylesEqual(_styleTarget, target)) return;
+        var duration = target.TransitionDuration > 0 ? target.TransitionDuration : ComputedStyle.TransitionDuration;
+        var canAnimate = duration > 0 && HasTransition(target, "background-color", "color", "opacity", "border-radius");
+        _styleTarget = target.Clone();
+        if (!canAnimate)
+        {
+            ComputedStyle = target;
+            _styleAnimating = false;
+            return;
+        }
+        _styleFrom = ComputedStyle.Clone();
+        _styleAnimationTime = 0;
+        _styleAnimating = true;
+    }
+
+    internal bool AdvanceStyleAnimation(float deltaTime)
+    {
+        if (!_styleAnimating || _styleTarget is null || _styleFrom is null) return false;
+        var duration = Math.Max(0.001f, _styleTarget.TransitionDuration > 0 ? _styleTarget.TransitionDuration : _styleFrom.TransitionDuration);
+        _styleAnimationTime = Math.Min(duration, _styleAnimationTime + Math.Max(0, deltaTime));
+        var t = _styleAnimationTime / duration;
+        if (_styleTarget.TransitionTimingFunction.Equals("ease", StringComparison.OrdinalIgnoreCase)) t = t * t * (3 - 2 * t);
+        ComputedStyle = Interpolate(_styleFrom, _styleTarget, t);
+        Invalidate();
+        if (_styleAnimationTime >= duration)
+        {
+            ComputedStyle = _styleTarget;
+            _styleAnimating = false;
+        }
+        return true;
+    }
+
+    private static bool HasTransition(ComputedStyle style, params string[] properties) => style.TransitionProperty.Equals("all", StringComparison.OrdinalIgnoreCase) || properties.Any(p => style.TransitionProperty.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => x.Equals(p, StringComparison.OrdinalIgnoreCase)));
+    private static bool StylesEqual(ComputedStyle a, ComputedStyle b) => a.BackgroundColor == b.BackgroundColor && a.Color == b.Color && Math.Abs(a.Opacity - b.Opacity) < 0.0001f && Math.Abs(a.BorderRadius - b.BorderRadius) < 0.0001f && a.TransitionProperty == b.TransitionProperty && Math.Abs(a.TransitionDuration - b.TransitionDuration) < 0.0001f;
+    private static ComputedStyle Interpolate(ComputedStyle from, ComputedStyle to, float t)
+    {
+        var result = to.Clone();
+        result.BackgroundColor = Lerp(from.BackgroundColor, to.BackgroundColor, t);
+        result.Color = Lerp(from.Color, to.Color, t);
+        result.Opacity = from.Opacity + (to.Opacity - from.Opacity) * t;
+        result.BorderRadius = from.BorderRadius + (to.BorderRadius - from.BorderRadius) * t;
+        return result;
+    }
+    private static UiColor Lerp(UiColor a, UiColor b, float t) => new((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t), (byte)(a.A + (b.A - a.A) * t));
     internal void SetHovered(bool value)
     {
         if (IsHovered == value) return;

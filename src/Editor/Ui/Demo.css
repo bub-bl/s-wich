@@ -48,6 +48,7 @@ root {
     text-align: center;
     vertical-align: center;
     line-height: 34px;
+    transition: background-color 180ms ease;
 }
 
 .action:hover {

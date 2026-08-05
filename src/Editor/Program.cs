@@ -43,7 +43,7 @@ internal static class Program
             ui.SetViewport(framebufferWidth, framebufferHeight);
             ui.Render();
         };
-        window.Updating += delta => { ui.Update(); webGpu?.Update(delta); };
+        window.Updating += delta => { ui.Update((float)delta); webGpu?.Update(delta); };
         window.Rendering += delta => webGpu?.Render(delta);
         window.Resized += (width, height) => { webGpu?.Resize(width, height); ui.SetViewport(width, height); ui.Render(); };
         window.Closing += () =>

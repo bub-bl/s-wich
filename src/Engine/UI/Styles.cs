@@ -37,6 +37,9 @@ public sealed class ComputedStyle
     public float BorderRadius { get; set; }
     public float FontSize { get; set; } = 16;
     public float LineHeight { get; set; }
+    public string TransitionProperty { get; set; } = "none";
+    public float TransitionDuration { get; set; }
+    public string TransitionTimingFunction { get; set; } = "ease";
     public UiColor BackgroundColor { get; set; } = UiColor.Transparent;
     public UiColor Color { get; set; } = UiColor.White;
 
@@ -183,6 +186,10 @@ public sealed class StyleSheet
             else if (key.Equals("border-radius", StringComparison.OrdinalIgnoreCase)) style.BorderRadius = ParseLength(value) ?? 0;
             else if (key.Equals("font-size", StringComparison.OrdinalIgnoreCase)) style.FontSize = ParseLength(value) ?? 16;
             else if (key.Equals("line-height", StringComparison.OrdinalIgnoreCase)) style.LineHeight = ParseLength(value) ?? style.FontSize * 1.25f;
+            else if (key.Equals("transition", StringComparison.OrdinalIgnoreCase)) ApplyTransition(style, value);
+            else if (key.Equals("transition-property", StringComparison.OrdinalIgnoreCase)) style.TransitionProperty = value;
+            else if (key.Equals("transition-duration", StringComparison.OrdinalIgnoreCase)) style.TransitionDuration = ParseTime(value);
+            else if (key.Equals("transition-timing-function", StringComparison.OrdinalIgnoreCase)) style.TransitionTimingFunction = value;
             else if (key.Equals("background-color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var bg)) style.BackgroundColor = bg;
             else if (key.Equals("color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var fg)) style.Color = fg;
         }
@@ -197,6 +204,23 @@ public sealed class StyleSheet
         var bottom = values.Length > 2 ? values[2] : top;
         var left = values.Length > 3 ? values[3] : right;
         apply(top, right, bottom, left);
+    }
+
+    private static void ApplyTransition(ComputedStyle style, string value)
+    {
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return;
+        style.TransitionProperty = parts[0];
+        if (parts.Length > 1) style.TransitionDuration = ParseTime(parts[1]);
+        if (parts.Length > 2) style.TransitionTimingFunction = parts[2];
+    }
+
+    private static float ParseTime(string value)
+    {
+        value = value.Trim().ToLowerInvariant();
+        var multiplier = value.EndsWith("ms", StringComparison.Ordinal) ? 0.001f : 1f;
+        value = value.TrimEnd('m', 's');
+        return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) ? Math.Max(0, seconds * multiplier) : 0;
     }
 
     private static float? ParseLength(string value) => float.TryParse(value.Trim().TrimEnd('p', 'x'), NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? Math.Max(0, n) : null;

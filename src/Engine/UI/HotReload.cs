@@ -17,12 +17,20 @@ public sealed partial class UiSystem
         if (_stylePath is not null) _styleWatcher = CreateWatcher(_stylePath);
     }
 
-    public void Update()
+    public void Update(float deltaTime = 1f / 60f)
     {
+        AdvanceAnimations(Screen, deltaTime);
         if (!_reloadRequested) return;
         _reloadRequested = false;
         if (_razorPath is not null && File.Exists(_razorPath)) LoadRazor(File.ReadAllText(_razorPath), _razorClassName);
         if (_stylePath is not null && File.Exists(_stylePath)) LoadStyles(File.ReadAllText(_stylePath));
+    }
+
+    private static bool AdvanceAnimations(Panel panel, float deltaTime)
+    {
+        var animated = panel.AdvanceStyleAnimation(deltaTime);
+        foreach (var child in panel.Children) animated |= AdvanceAnimations(child, deltaTime);
+        return animated;
     }
 
     private FileSystemWatcher CreateWatcher(string path)
