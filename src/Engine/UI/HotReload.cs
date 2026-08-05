@@ -19,6 +19,7 @@ public sealed partial class UiSystem
 
     public void Update(float deltaTime = 1f / 60f)
     {
+        RenderRazorIfNeeded();
         AdvanceAnimations(Screen, deltaTime);
         AdvanceCarets(Screen, deltaTime);
         if (!_reloadRequested) return;

@@ -125,11 +125,12 @@ public abstract class PanelComponent : Panel
     public bool StateDirty { get; private set; } = true;
     public string? RazorFile { get; internal set; }
     public StyleSheet? StyleSheet { get; private set; }
+    internal Action? StateChanged { get; set; }
 
     protected virtual int BuildHash() => 0;
     protected virtual void OnTreeFirstBuilt() { }
     protected virtual void OnTreeBuilt() { }
-    public void StateHasChanged() { StateDirty = true; Invalidate(); }
+    public void StateHasChanged() { StateDirty = true; Invalidate(); StateChanged?.Invoke(); }
     internal bool NeedsBuild() => StateDirty || !_built || _lastBuildHash != BuildHash();
     internal void MarkBuilt(StyleSheet? styleSheet)
     {

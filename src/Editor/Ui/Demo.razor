@@ -1,18 +1,32 @@
-<root>
-  <div class="card">
+<div class="card">
     <div class="title">Crowbar Razor UI</div>
     <div class="subtitle">Razor + Yoga + Skia + WebGPU</div>
 
     <div class="separator"></div>
 
     <div class="row">
-      <button class="action">TEST BUTTON</button>
+      <button class="action" @onclick="Increment">CLICKED @count TIMES</button>
       <div class="status">SCREEN PANEL ACTIVE</div>
     </div>
 
+    @if (count > 0)
+    {
+      <div class="status">LAST ACTION REGISTERED</div>
+    }
+
     <div class="field-label">INPUT FIELD</div>
-    <input class="field" value="Type input here" />
+    <input class="field" value="Type input here" @bind-value="name" />
+    <div class="status">@name</div>
 
     <div class="footer">Rendered by the native Crowbar UI pipeline</div>
-  </div>
-</root>
+</div>
+
+@code {
+    private int count;
+    private string name = "Type input here";
+
+    private void Increment()
+    {
+        count++;
+    }
+}
