@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 #pragma warning disable CS0067
 
@@ -16,9 +17,12 @@ internal sealed class NullWindowInputSource : IWindowInputSource
 
 internal sealed class WindowsWindowInputSource : IWindowInputSource
 {
+    private const double KeyRepeatDelaySeconds = 0.4;
+    private const double KeyRepeatIntervalSeconds = 0.02;
     private readonly Func<nint> _windowHandle;
     private readonly bool[] _previousKeys = new bool[256];
     private readonly bool[] _previousButtons = new bool[5];
+    private readonly double[] _nextKeyRepeat = new double[256];
     private int _lastX = int.MinValue;
     private int _lastY = int.MinValue;
 
@@ -32,6 +36,7 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
     {
         var handle = _windowHandle();
         if (handle == 0 || GetForegroundWindow() != handle) return;
+        var now = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
         if (GetCursorPos(out var point) && ScreenToClient(handle, ref point))
         {
             if (point.X != _lastX || point.Y != _lastY)
@@ -50,9 +55,17 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
         for (var key = 8; key < _previousKeys.Length; key++)
         {
             var down = (GetAsyncKeyState(key) & 0x8000) != 0;
-            if (down == _previousKeys[key]) continue;
-            _previousKeys[key] = down;
-            KeyChanged?.Invoke(new KeyEvent(key, down, false));
+            if (down != _previousKeys[key])
+            {
+                _previousKeys[key] = down;
+                _nextKeyRepeat[key] = down ? now + KeyRepeatDelaySeconds : 0;
+                KeyChanged?.Invoke(new KeyEvent(key, down, false));
+            }
+            else if (down && now >= _nextKeyRepeat[key])
+            {
+                _nextKeyRepeat[key] = now + KeyRepeatIntervalSeconds;
+                KeyChanged?.Invoke(new KeyEvent(key, true, true));
+            }
         }
     }
 
