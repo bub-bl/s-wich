@@ -60,7 +60,14 @@ public class Panel
             return;
         }
 
-        if (_styleTarget is not null && StylesEqual(_styleTarget, target)) return;
+        if (_styleTarget is not null && StylesEqual(_styleTarget, target))
+        {
+            // ComputedStyle can receive inherited values during the layout
+            // pass. Restore the unmodified target before inheritance is
+            // applied again, otherwise values such as opacity accumulate.
+            if (!_styleAnimating) ComputedStyle = target;
+            return;
+        }
         var duration = target.TransitionDuration > 0 ? target.TransitionDuration : ComputedStyle.TransitionDuration;
         var canAnimate = duration > 0 && HasTransition(target, "background-color", "color", "opacity", "border-radius");
         _styleTarget = target.Clone();
@@ -93,7 +100,47 @@ public class Panel
     }
 
     private static bool HasTransition(ComputedStyle style, params string[] properties) => style.TransitionProperty.Equals("all", StringComparison.OrdinalIgnoreCase) || properties.Any(p => style.TransitionProperty.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => x.Equals(p, StringComparison.OrdinalIgnoreCase)));
-    private static bool StylesEqual(ComputedStyle a, ComputedStyle b) => a.BackgroundColor == b.BackgroundColor && a.Color == b.Color && Math.Abs(a.Opacity - b.Opacity) < 0.0001f && Math.Abs(a.BorderRadius - b.BorderRadius) < 0.0001f && a.TransitionProperty == b.TransitionProperty && Math.Abs(a.TransitionDuration - b.TransitionDuration) < 0.0001f;
+    private static bool StylesEqual(ComputedStyle a, ComputedStyle b) =>
+        a.Display == b.Display &&
+        a.FlexDirection == b.FlexDirection &&
+        a.AlignItems == b.AlignItems &&
+        a.JustifyContent == b.JustifyContent &&
+        a.Overflow == b.Overflow &&
+        a.TextAlign == b.TextAlign &&
+        a.VerticalAlign == b.VerticalAlign &&
+        a.BoxSizing == b.BoxSizing &&
+        NullableFloatEqual(a.Width, b.Width) &&
+        NullableFloatEqual(a.Height, b.Height) &&
+        NullableFloatEqual(a.MinWidth, b.MinWidth) &&
+        NullableFloatEqual(a.MaxWidth, b.MaxWidth) &&
+        NullableFloatEqual(a.MinHeight, b.MinHeight) &&
+        NullableFloatEqual(a.MaxHeight, b.MaxHeight) &&
+        FloatEqual(a.FlexGrow, b.FlexGrow) &&
+        FloatEqual(a.Gap, b.Gap) &&
+        FloatEqual(a.RowGap, b.RowGap) &&
+        FloatEqual(a.ColumnGap, b.ColumnGap) &&
+        FloatEqual(a.Margin, b.Margin) &&
+        FloatEqual(a.Padding, b.Padding) &&
+        FloatEqual(a.MarginTop, b.MarginTop) &&
+        FloatEqual(a.MarginRight, b.MarginRight) &&
+        FloatEqual(a.MarginBottom, b.MarginBottom) &&
+        FloatEqual(a.MarginLeft, b.MarginLeft) &&
+        FloatEqual(a.PaddingTop, b.PaddingTop) &&
+        FloatEqual(a.PaddingRight, b.PaddingRight) &&
+        FloatEqual(a.PaddingBottom, b.PaddingBottom) &&
+        FloatEqual(a.PaddingLeft, b.PaddingLeft) &&
+        FloatEqual(a.Opacity, b.Opacity) &&
+        FloatEqual(a.BorderRadius, b.BorderRadius) &&
+        FloatEqual(a.FontSize, b.FontSize) &&
+        FloatEqual(a.LineHeight, b.LineHeight) &&
+        a.TransitionProperty == b.TransitionProperty &&
+        FloatEqual(a.TransitionDuration, b.TransitionDuration) &&
+        a.TransitionTimingFunction == b.TransitionTimingFunction &&
+        a.BackgroundColor == b.BackgroundColor &&
+        a.Color == b.Color;
+
+    private static bool FloatEqual(float a, float b) => Math.Abs(a - b) < 0.0001f;
+    private static bool NullableFloatEqual(float? a, float? b) => a is null ? b is null : b is not null && FloatEqual(a.Value, b.Value);
     private static ComputedStyle Interpolate(ComputedStyle from, ComputedStyle to, float t)
     {
         var result = to.Clone();

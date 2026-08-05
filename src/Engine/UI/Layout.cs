@@ -26,6 +26,13 @@ public sealed class YogaLayoutEngine
         {
             if (panel.ComputedStyle.Color == UiColor.White) panel.ComputedStyle.Color = inherited.Color;
             panel.ComputedStyle.Opacity *= inherited.Opacity;
+            // Text is rendered by the leaf label/input inside controls such as
+            // Button. Carry the inherited text metrics down so the leaf uses
+            // the same alignment and line box as its parent.
+            if (panel.ComputedStyle.TextAlign == "left") panel.ComputedStyle.TextAlign = inherited.TextAlign;
+            if (panel.ComputedStyle.VerticalAlign == "top") panel.ComputedStyle.VerticalAlign = inherited.VerticalAlign;
+            if (Math.Abs(panel.ComputedStyle.FontSize - 16) < 0.0001f) panel.ComputedStyle.FontSize = inherited.FontSize;
+            if (panel.ComputedStyle.LineHeight == 0) panel.ComputedStyle.LineHeight = inherited.LineHeight;
         }
         foreach (var child in panel.Children) ApplyStyles(child, sheet, panel.ComputedStyle);
     }

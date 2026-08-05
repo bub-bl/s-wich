@@ -29,6 +29,15 @@ public static class UiSmokeTests
         root.SetViewport(320, 200);
         renderer.MarkDirty();
         renderer.Render(root);
+        var buttonText = button.Children[0];
+        button.SetInlineStyle("padding", "10px");
+        button.SetInlineStyle("text-align", "center");
+        button.SetInlineStyle("vertical-align", "center");
+        button.SetInlineStyle("line-height", "32px");
+        renderer.MarkDirty();
+        renderer.Render(root);
+        if (button.ComputedStyle.PaddingLeft != 10 || buttonText.ComputedStyle.TextAlign != "center" || buttonText.ComputedStyle.VerticalAlign != "center" || buttonText.ComputedStyle.LineHeight != 32)
+            throw new InvalidOperationException("Button layout/text styles were not recalculated or inherited.");
         var input = new UiSystem();
         button.AddClass("hover-target");
         input.LoadStyles(".hover-target:hover { background-color: #00ff00ff; }");
