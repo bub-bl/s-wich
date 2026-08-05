@@ -37,6 +37,13 @@ public class TextInput : Panel
         Invalidate();
     }
     internal void FocusAtEnd() { CaretIndex = Value.Length; CaretVisible = true; _caretTime = 0; Invalidate(); }
+    internal void CopyInteractionStateFrom(TextInput previous)
+    {
+        CaretIndex = Math.Clamp(previous.CaretIndex, 0, Value.Length);
+        CaretVisible = previous.CaretVisible;
+        _caretTime = 0;
+        SetFocused(previous.IsFocused);
+    }
     internal void AdvanceCaret(float deltaTime)
     {
         if (!IsFocused) { CaretVisible = false; _caretTime = 0; return; }

@@ -49,10 +49,24 @@ public sealed partial class UiSystem : IDisposable
         }
         _razorRenderPending = false;
         var old = Content;
+        var oldFocused = FocusedPanel;
         Content = (_razorFactory ?? new RazorComponentFactory(_razorComponents)).BuildTree(_razorRoot);
         if (old is not null) Screen.RemoveChild(old);
         Screen.AddChild(Content);
+        if (oldFocused is TextInput && FindPanel<TextInput>(Content) is { } replacement)
+        {
+            replacement.SetFocused(true);
+            FocusedPanel = replacement;
+        }
         Renderer.MarkDirty();
+    }
+
+    private static T? FindPanel<T>(Panel panel) where T : Panel
+    {
+        if (panel is T match) return match;
+        foreach (var child in panel.Children)
+            if (FindPanel<T>(child) is { } nested) return nested;
+        return null;
     }
     public void Dispose() { StopWatching(); Renderer.Dispose(); }
 }

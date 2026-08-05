@@ -109,6 +109,13 @@ public static class UiSmokeTests
         var child = Find(ui.Screen, p => p.Text == "Child component") is not null;
         if (!bound || !changed || !child)
             throw new InvalidOperationException($"Razor binding test failed (bound={bound}, onchange={changed}, child={child}).");
+        ui.ProcessPointerDown(textInput.Layout.X + 1, textInput.Layout.Y + 1);
+        ui.ProcessKey(0x43, true);
+        ui.Update();
+        ui.Render();
+        var rerenderedInput = Find(ui.Screen, p => p is TextInput) as TextInput;
+        if (rerenderedInput is null || rerenderedInput.Value != "secondC" || !rerenderedInput.IsFocused)
+            throw new InvalidOperationException("Razor input lost its value or focus during binding rerender.");
     }
 
     private static Panel? Find(Panel panel, Func<Panel, bool> predicate)

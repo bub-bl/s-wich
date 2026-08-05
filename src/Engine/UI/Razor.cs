@@ -294,7 +294,11 @@ internal static class HtmlPanelParser
         {
             var xml = XDocument.Parse("<root>" + markup + "</root>", LoadOptions.PreserveWhitespace);
             var index = 0;
-            foreach (var node in xml.Root!.Nodes()) AddNode(root, node, root, components, $"root/{index++}", preservedInputs);
+            foreach (var node in xml.Root!.Nodes())
+            {
+                AddNode(root, node, root, components, $"root/{index}", preservedInputs);
+                if (node is XElement) index++;
+            }
             return root;
         }
         catch (Exception ex)
@@ -361,9 +365,20 @@ internal static class HtmlPanelParser
             else panel.Attributes[attribute.Name.LocalName] = attribute.Value;
         }
         var childIndex = 0;
-        foreach (var child in element.Nodes()) AddNode(panel, child, runtime, components, $"{key}/{childIndex++}", preservedInputs);
+        foreach (var child in element.Nodes())
+        {
+            AddNode(panel, child, runtime, components, $"{key}/{childIndex}", preservedInputs);
+            if (child is XElement) childIndex++;
+        }
         if (panel is TextInput inputValue)
-            inputValue.SetValue(preservedInputs.TryGetValue(key, out var previous) ? previous.Value : declaredValue ?? string.Empty);
+        {
+            if (preservedInputs.TryGetValue(key, out var previous))
+            {
+                inputValue.SetValue(previous.Value, previous.CaretIndex);
+                inputValue.CopyInteractionStateFrom(previous);
+            }
+            else inputValue.SetValue(declaredValue ?? string.Empty);
+        }
         if (panel is Button button && click is not null) button.Clicked += e => RazorEventInvoker.Invoke(runtime, click, e);
         if (panel is TextInput textInput)
         {
