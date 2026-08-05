@@ -20,6 +20,11 @@ public class Panel
     public ComputedStyle ComputedStyle { get; internal set; } = new();
     public UiRect Layout { get; internal set; }
     public bool IsVisible { get; set; } = true;
+    public bool IsHovered { get; private set; }
+    public bool IsPressed { get; private set; }
+    public bool IsFocused { get; private set; }
+    public event Action<Panel>? PointerEnter;
+    public event Action<Panel>? PointerExit;
 
     public void AddClass(string value) { if (_classes.Add(value)) Invalidate(); }
     public void RemoveClass(string value) { if (_classes.Remove(value)) Invalidate(); }
@@ -34,6 +39,15 @@ public class Panel
     public void ClearChildren() { foreach (var child in _children) child.Parent = null; _children.Clear(); Invalidate(); }
     public void SetInlineStyle(string key, string value) { InlineStyle[key] = value; Invalidate(); }
     public void Invalidate() { LayoutDirty = true; Parent?.Invalidate(); }
+    internal void SetHovered(bool value)
+    {
+        if (IsHovered == value) return;
+        IsHovered = value;
+        if (value) PointerEnter?.Invoke(this); else PointerExit?.Invoke(this);
+        Invalidate();
+    }
+    internal void SetPressed(bool value) { if (IsPressed != value) { IsPressed = value; Invalidate(); } }
+    internal void SetFocused(bool value) { if (IsFocused != value) { IsFocused = value; Invalidate(); } }
     internal void ClearDirty() { LayoutDirty = false; foreach (var child in _children) child.ClearDirty(); }
 }
 

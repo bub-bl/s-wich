@@ -16,6 +16,7 @@ public sealed partial class UiSystem
     public Panel? ProcessPointerMove(float x, float y)
     {
         var hit = Screen.HitTest(x / Math.Max(0.01f, Screen.Scale), y / Math.Max(0.01f, Screen.Scale));
+        UpdateHoverPath(hit);
         _hovered = hit;
         if (hit is not null) PointerMoved?.Invoke(hit, new UiPointerEvent(x, y));
         return hit;
@@ -25,7 +26,8 @@ public sealed partial class UiSystem
     {
         var hit = ProcessPointerMove(x, y);
         if (hit is null) return null;
-        FocusedPanel = hit;
+        UpdateFocus(hit);
+        UpdatePressedPath(hit, true);
         var e = new UiPointerEvent(x, y, button);
         PointerDown?.Invoke(hit, e);
         _captured = hit is Button ? hit : null;
@@ -38,8 +40,34 @@ public sealed partial class UiSystem
     {
         var hit = _captured ?? Screen.HitTest(x / Math.Max(0.01f, Screen.Scale), y / Math.Max(0.01f, Screen.Scale));
         if (hit is not null) PointerUp?.Invoke(hit, new UiPointerEvent(x, y, button));
+        UpdatePressedPath(_captured ?? hit, false);
         _captured = null;
         return hit;
+    }
+
+    private void UpdateHoverPath(Panel? hit)
+    {
+        var oldPath = PathToRoot(_hovered).ToHashSet();
+        var newPath = PathToRoot(hit).ToHashSet();
+        foreach (var panel in oldPath.Except(newPath)) panel.SetHovered(false);
+        foreach (var panel in newPath.Except(oldPath)) panel.SetHovered(true);
+    }
+
+    private void UpdatePressedPath(Panel? hit, bool pressed)
+    {
+        foreach (var panel in PathToRoot(hit)) panel.SetPressed(pressed);
+    }
+
+    private void UpdateFocus(Panel? panel)
+    {
+        if (FocusedPanel is not null && !ReferenceEquals(FocusedPanel, panel)) FocusedPanel.SetFocused(false);
+        panel?.SetFocused(true);
+        FocusedPanel = panel;
+    }
+
+    private static IEnumerable<Panel> PathToRoot(Panel? panel)
+    {
+        for (var current = panel; current is not null; current = current.Parent) yield return current;
     }
 
     public void ProcessPointerWheel(float x, float y, float deltaX, float deltaY)

@@ -6,7 +6,7 @@ public sealed partial class UiSystem : IDisposable
     public SkiaUiRenderer Renderer { get; } = new();
     public Panel? Content { get; private set; }
     public StyleSheet? StyleSheet { get; private set; }
-    public bool IsDirty => Renderer.IsDirty || Screen.Layout is { Width: 0 };
+    public bool IsDirty => Renderer.IsDirty || Screen.LayoutDirty || Screen.Layout is { Width: 0 };
 
     public void SetViewport(int width, int height) => Renderer.Resize(width, height);
 

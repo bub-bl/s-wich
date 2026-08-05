@@ -30,12 +30,19 @@ public static class UiSmokeTests
         renderer.MarkDirty();
         renderer.Render(root);
         var input = new UiSystem();
+        button.AddClass("hover-target");
+        input.LoadStyles(".hover-target:hover { background-color: #00ff00ff; }");
         input.Screen.SetViewport(320, 200);
         input.Screen.AddChild(button);
         input.Renderer.Resize(320, 200);
         input.Render();
         input.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
         if (!clicked) throw new InvalidOperationException("Button input routing failed.");
+        if (!button.IsHovered || !button.IsPressed) throw new InvalidOperationException("UI hover/active state was not routed.");
+        input.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+        if (button.IsPressed) throw new InvalidOperationException("UI active state was not cleared.");
+        input.ProcessPointerMove(319, 199);
+        if (button.IsHovered) throw new InvalidOperationException("UI hover exit was not routed.");
         input.Dispose();
     }
 }

@@ -50,6 +50,14 @@ root {
     line-height: 34px;
 }
 
+.action:hover {
+    background-color: #4c9df0ff;
+}
+
+.action:active {
+    background-color: #245da8ff;
+}
+
 .status {
     width: 280px;
     height: 24px;
@@ -74,6 +82,10 @@ root {
     vertical-align: center;
     line-height: 34px;
     box-sizing: border-box;
+}
+
+.field:focus {
+    background-color: #172840ff;
 }
 
 .footer {

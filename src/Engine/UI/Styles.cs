@@ -83,16 +83,36 @@ public sealed record StyleRule(string Selector, IReadOnlyDictionary<string, stri
 {
     public bool Matches(Panel panel)
     {
-        var selector = Selector.Trim();
-        if (selector.Contains(' ')) return selector.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last() is var last && MatchesSimple(last, panel);
-        return MatchesSimple(selector, panel);
+        var parts = Selector.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0 || !MatchesSimple(parts[^1], panel)) return false;
+        var ancestor = panel.Parent;
+        for (var i = parts.Length - 2; i >= 0; i--)
+        {
+            while (ancestor is not null && !MatchesSimple(parts[i], ancestor)) ancestor = ancestor.Parent;
+            if (ancestor is null) return false;
+            ancestor = ancestor.Parent;
+        }
+        return true;
     }
 
     private static bool MatchesSimple(string selector, Panel panel)
     {
-        if (selector.StartsWith('.')) return panel.Classes.Contains(selector[1..]);
-        if (selector.StartsWith('#')) return panel.Id == selector[1..];
-        return selector == "*" || selector.Equals(panel.TagName, StringComparison.OrdinalIgnoreCase);
+        var pseudoIndex = selector.IndexOf(':');
+        var simple = pseudoIndex >= 0 ? selector[..pseudoIndex] : selector;
+        var pseudo = pseudoIndex >= 0 ? selector[(pseudoIndex + 1)..] : string.Empty;
+        if (pseudo.Length > 0 && !pseudo.Equals("hover", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("active", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("focus", StringComparison.OrdinalIgnoreCase)) return false;
+        if (pseudo.Equals("hover", StringComparison.OrdinalIgnoreCase) && !panel.IsHovered) return false;
+        if (pseudo.Equals("active", StringComparison.OrdinalIgnoreCase) && !panel.IsPressed) return false;
+        if (pseudo.Equals("focus", StringComparison.OrdinalIgnoreCase) && !panel.IsFocused) return false;
+        if (simple == "*") return true;
+        var type = Regex.Match(simple, "^[a-zA-Z][a-zA-Z0-9_-]*").Value;
+        if (!string.IsNullOrEmpty(type) && !type.Equals(panel.TagName, StringComparison.OrdinalIgnoreCase)) return false;
+        foreach (Match match in Regex.Matches(simple, "[.#]([a-zA-Z0-9_-]+)"))
+        {
+            if (match.Value[0] == '.' && !panel.Classes.Contains(match.Groups[1].Value)) return false;
+            if (match.Value[0] == '#' && !string.Equals(panel.Id, match.Groups[1].Value, StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        return true;
     }
 }
 

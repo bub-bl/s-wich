@@ -148,7 +148,11 @@ public sealed unsafe class WebGpuContext : IDisposable
         Runtime.Draw(pass, CubeVertexCount);
         if (Ui is not null && _uiPipeline != null && _uiBindGroup != null)
         {
-            bool uiChanged = _uiTextureDirty || Ui.Renderer.IsDirty;
+            // Ui.Render() peut découvrir une invalidation de layout/style (par
+            // exemple :hover) et marquer le renderer dirty juste avant de
+            // rasteriser. Il faut donc interroger l'état de l'UI avant Render,
+            // pas uniquement Renderer.IsDirty à cet instant.
+            bool uiChanged = _uiTextureDirty || Ui.IsDirty;
             var pixels = Ui.Render();
             if (uiChanged && pixels.Length > 0)
             {
