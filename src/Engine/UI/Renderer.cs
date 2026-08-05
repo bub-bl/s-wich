@@ -99,6 +99,13 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
             canvas.DrawText(line, x, baseline, SKTextAlign.Left, font, paint);
             y += lineHeight;
         }
+
+        if (panel is TextInput input && input.IsFocused && input.CaretVisible && lines.Count == 1)
+        {
+            var caretX = left + font.MeasureText(input.Value[..Math.Clamp(input.CaretIndex, 0, input.Value.Length)]);
+            using var caretPaint = new SKPaint { Color = paint.Color, StrokeWidth = 1.5f, IsAntialias = true };
+            canvas.DrawLine(caretX, top + 3, caretX, top + Math.Max(font.Size + 3, contentHeight - 3), caretPaint);
+        }
     }
 
     private static List<string> WrapText(string text, SKFont font, float width)

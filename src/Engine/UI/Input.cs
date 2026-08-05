@@ -25,11 +25,12 @@ public sealed partial class UiSystem
     public Panel? ProcessPointerDown(float x, float y, int button = 0)
     {
         var hit = ProcessPointerMove(x, y);
-        if (hit is null) return null;
+        if (hit is null || !hit.IsEnabled) return null;
         UpdateFocus(hit);
         UpdatePressedPath(hit, true);
         var e = new UiPointerEvent(x, y, button);
         PointerDown?.Invoke(hit, e);
+        for (var current = hit; current is not null; current = current.Parent) current.RaisePointerDown(e);
         _captured = hit is Button ? hit : null;
         for (var current = hit; current is not null; current = current.Parent)
             if (current is Button buttonPanel) { buttonPanel.RaiseClicked(e); break; }
@@ -40,6 +41,11 @@ public sealed partial class UiSystem
     {
         var hit = _captured ?? Screen.HitTest(x / Math.Max(0.01f, Screen.Scale), y / Math.Max(0.01f, Screen.Scale));
         if (hit is not null) PointerUp?.Invoke(hit, new UiPointerEvent(x, y, button));
+        if (hit is not null)
+        {
+            var e = new UiPointerEvent(x, y, button);
+            for (var current = hit; current is not null; current = current.Parent) current.RaisePointerUp(e);
+        }
         UpdatePressedPath(_captured ?? hit, false);
         _captured = null;
         return hit;
@@ -80,5 +86,12 @@ public sealed partial class UiSystem
     {
         if (FocusedPanel is TextInput input) input.HandleKey(keyCode, isDown);
         if (FocusedPanel is not null) KeyChanged?.Invoke(FocusedPanel, new KeyEvent(keyCode, isDown, isRepeat));
+    }
+
+    private static IEnumerable<TextInput> Inputs(Panel panel)
+    {
+        if (panel is TextInput input) yield return input;
+        foreach (var child in panel.Children)
+            foreach (var nested in Inputs(child)) yield return nested;
     }
 }

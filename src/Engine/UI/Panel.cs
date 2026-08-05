@@ -12,6 +12,8 @@ public class Panel
     private float _styleAnimationTime;
     private bool _styleAnimating;
     private bool _hasComputedStyle;
+    private bool _isEnabled = true;
+    private bool _isChecked;
     internal bool LayoutDirty { get; private set; } = true;
 
     public Panel? Parent { get; private set; }
@@ -25,11 +27,15 @@ public class Panel
     public ComputedStyle ComputedStyle { get; internal set; } = new();
     public UiRect Layout { get; internal set; }
     public bool IsVisible { get; set; } = true;
+    public bool IsEnabled { get => _isEnabled; set { if (_isEnabled != value) { _isEnabled = value; Invalidate(); } } }
+    public bool IsChecked { get => _isChecked; set { if (_isChecked != value) { _isChecked = value; Invalidate(); } } }
     public bool IsHovered { get; private set; }
     public bool IsPressed { get; private set; }
     public bool IsFocused { get; private set; }
     public event Action<Panel>? PointerEnter;
     public event Action<Panel>? PointerExit;
+    public event Action<Panel, UiPointerEvent>? PointerDown;
+    public event Action<Panel, UiPointerEvent>? PointerUp;
 
     public void AddClass(string value) { if (_classes.Add(value)) Invalidate(); }
     public void RemoveClass(string value) { if (_classes.Remove(value)) Invalidate(); }
@@ -107,6 +113,8 @@ public class Panel
     }
     internal void SetPressed(bool value) { if (IsPressed != value) { IsPressed = value; Invalidate(); } }
     internal void SetFocused(bool value) { if (IsFocused != value) { IsFocused = value; Invalidate(); } }
+    internal void RaisePointerDown(UiPointerEvent e) => PointerDown?.Invoke(this, e);
+    internal void RaisePointerUp(UiPointerEvent e) => PointerUp?.Invoke(this, e);
     internal void ClearDirty() { LayoutDirty = false; foreach (var child in _children) child.ClearDirty(); }
 }
 

@@ -103,10 +103,12 @@ public sealed record StyleRule(string Selector, IReadOnlyDictionary<string, stri
         var pseudoIndex = selector.IndexOf(':');
         var simple = pseudoIndex >= 0 ? selector[..pseudoIndex] : selector;
         var pseudo = pseudoIndex >= 0 ? selector[(pseudoIndex + 1)..] : string.Empty;
-        if (pseudo.Length > 0 && !pseudo.Equals("hover", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("active", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("focus", StringComparison.OrdinalIgnoreCase)) return false;
+        if (pseudo.Length > 0 && !pseudo.Equals("hover", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("active", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("focus", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("disabled", StringComparison.OrdinalIgnoreCase) && !pseudo.Equals("checked", StringComparison.OrdinalIgnoreCase)) return false;
         if (pseudo.Equals("hover", StringComparison.OrdinalIgnoreCase) && !panel.IsHovered) return false;
         if (pseudo.Equals("active", StringComparison.OrdinalIgnoreCase) && !panel.IsPressed) return false;
         if (pseudo.Equals("focus", StringComparison.OrdinalIgnoreCase) && !panel.IsFocused) return false;
+        if (pseudo.Equals("disabled", StringComparison.OrdinalIgnoreCase) && panel.IsEnabled) return false;
+        if (pseudo.Equals("checked", StringComparison.OrdinalIgnoreCase) && !panel.IsChecked) return false;
         if (simple == "*") return true;
         var type = Regex.Match(simple, "^[a-zA-Z][a-zA-Z0-9_-]*").Value;
         if (!string.IsNullOrEmpty(type) && !type.Equals(panel.TagName, StringComparison.OrdinalIgnoreCase)) return false;

@@ -20,10 +20,17 @@ public sealed partial class UiSystem
     public void Update(float deltaTime = 1f / 60f)
     {
         AdvanceAnimations(Screen, deltaTime);
+        AdvanceCarets(Screen, deltaTime);
         if (!_reloadRequested) return;
         _reloadRequested = false;
         if (_razorPath is not null && File.Exists(_razorPath)) LoadRazor(File.ReadAllText(_razorPath), _razorClassName);
         if (_stylePath is not null && File.Exists(_stylePath)) LoadStyles(File.ReadAllText(_stylePath));
+    }
+
+    private static void AdvanceCarets(Panel panel, float deltaTime)
+    {
+        if (panel is TextInput input) input.AdvanceCaret(deltaTime);
+        foreach (var child in panel.Children) AdvanceCarets(child, deltaTime);
     }
 
     private static bool AdvanceAnimations(Panel panel, float deltaTime)

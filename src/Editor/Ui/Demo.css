@@ -89,6 +89,10 @@ root {
     background-color: #172840ff;
 }
 
+.field:disabled {
+    opacity: 0.55;
+}
+
 .footer {
     width: 480px;
     height: 22px;
