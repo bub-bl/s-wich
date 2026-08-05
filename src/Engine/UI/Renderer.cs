@@ -53,7 +53,9 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
             canvas.DrawRoundRect(rect, panel.ComputedStyle.BorderRadius, panel.ComputedStyle.BorderRadius, paint);
         }
         var text = panel.TagName == "text" ? panel.Text : panel is TextInput input ? input.Value : string.Empty;
-        if (!string.IsNullOrEmpty(text)) DrawText(canvas, panel, rect, text, alpha);
+        // An empty focused input still needs a text pass so its caret can be
+        // drawn at the beginning of the field.
+        if (!string.IsNullOrEmpty(text) || panel is TextInput { IsFocused: true }) DrawText(canvas, panel, rect, text, alpha);
         if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase))
         {
             canvas.Save();
