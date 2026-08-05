@@ -53,12 +53,7 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
             canvas.DrawRoundRect(rect, panel.ComputedStyle.BorderRadius, panel.ComputedStyle.BorderRadius, paint);
         }
         var text = panel.TagName == "text" ? panel.Text : panel is TextInput input ? input.Value : string.Empty;
-        if (!string.IsNullOrEmpty(text))
-        {
-            using var paint = new SKPaint { Color = new SKColor(panel.ComputedStyle.Color.R, panel.ComputedStyle.Color.G, panel.ComputedStyle.Color.B, alpha), IsAntialias = true };
-            using var font = new SKFont { Size = panel.ComputedStyle.FontSize };
-            canvas.DrawText(text, rect.Left, rect.Top + panel.ComputedStyle.FontSize + 2, SKTextAlign.Left, font, paint);
-        }
+        if (!string.IsNullOrEmpty(text)) DrawText(canvas, panel, rect, text, alpha);
         if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase))
         {
             canvas.Save();
@@ -67,6 +62,65 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
             canvas.Restore();
         }
         else foreach (var child in panel.Children) DrawPanel(canvas, child, ox, oy, opacity);
+    }
+
+    private static void DrawText(SKCanvas canvas, Panel panel, SKRect rect, string text, byte alpha)
+    {
+        var style = panel.ComputedStyle;
+        var left = rect.Left + style.PaddingLeft;
+        var top = rect.Top + style.PaddingTop;
+        var contentWidth = Math.Max(0, rect.Width - style.PaddingLeft - style.PaddingRight);
+        var contentHeight = Math.Max(0, rect.Height - style.PaddingTop - style.PaddingBottom);
+        var lineHeight = style.LineHeight > 0 ? style.LineHeight : style.FontSize * 1.25f;
+
+        using var paint = new SKPaint { Color = new SKColor(style.Color.R, style.Color.G, style.Color.B, alpha), IsAntialias = true };
+        using var font = new SKFont { Size = style.FontSize };
+        var metrics = font.Metrics;
+        var lines = WrapText(text, font, contentWidth);
+        var blockHeight = lines.Count * lineHeight;
+        var y = style.VerticalAlign.Equals("center", StringComparison.OrdinalIgnoreCase)
+            ? top + Math.Max(0, (contentHeight - blockHeight) / 2)
+            : style.VerticalAlign.Equals("bottom", StringComparison.OrdinalIgnoreCase)
+                ? top + Math.Max(0, contentHeight - blockHeight)
+                : top;
+
+        foreach (var line in lines)
+        {
+            var measured = font.MeasureText(line);
+            var x = style.TextAlign.Equals("center", StringComparison.OrdinalIgnoreCase)
+                ? left + Math.Max(0, (contentWidth - measured) / 2)
+                : style.TextAlign.Equals("right", StringComparison.OrdinalIgnoreCase)
+                    ? left + Math.Max(0, contentWidth - measured)
+                    : left;
+            // Skia reçoit une baseline, pas le sommet du texte. La position doit
+            // donc tenir compte de la hauteur de la ligne pour que le glyphe soit
+            // réellement centré dans un input ou un bouton.
+            var baseline = y + lineHeight / 2f - (metrics.Ascent + metrics.Descent) / 2f;
+            canvas.DrawText(line, x, baseline, SKTextAlign.Left, font, paint);
+            y += lineHeight;
+        }
+    }
+
+    private static List<string> WrapText(string text, SKFont font, float width)
+    {
+        if (width <= 0 || font.MeasureText(text) <= width) return text.Split('\n').ToList();
+        var lines = new List<string>();
+        foreach (var rawLine in text.Split('\n'))
+        {
+            var current = string.Empty;
+            foreach (var word in rawLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var candidate = string.IsNullOrEmpty(current) ? word : current + " " + word;
+                if (!string.IsNullOrEmpty(current) && font.MeasureText(candidate) > width)
+                {
+                    lines.Add(current);
+                    current = word;
+                }
+                else current = candidate;
+            }
+            if (!string.IsNullOrEmpty(current)) lines.Add(current);
+        }
+        return lines.Count == 0 ? [string.Empty] : lines;
     }
 
     public void MarkDirty() => _dirty = true;

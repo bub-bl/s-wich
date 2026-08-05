@@ -90,6 +90,7 @@ internal static class HtmlPanelParser
             if (attribute.Name == "class") foreach (var c in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)) panel.AddClass(c);
             else if (attribute.Name == "id") panel.Id = attribute.Value;
             else if (attribute.Name == "style") foreach (var declaration in attribute.Value.Split(';')) { var p = declaration.Split(':', 2); if (p.Length == 2) panel.SetInlineStyle(p[0].Trim(), p[1].Trim()); }
+            else if (attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase) && panel is TextInput input) input.SetValue(attribute.Value);
             else panel.Attributes[attribute.Name.LocalName] = attribute.Value;
         }
         foreach (var child in element.Nodes()) AddNode(panel, child);

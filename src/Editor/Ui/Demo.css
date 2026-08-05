@@ -45,6 +45,9 @@ root {
     color: #ffffffff;
     align-items: center;
     justify-content: center;
+    text-align: center;
+    vertical-align: center;
+    line-height: 34px;
 }
 
 .status {
@@ -63,9 +66,14 @@ root {
 .field {
     width: 480px;
     height: 34px;
+    padding: 0 12px;
     background-color: #0d1420ff;
     border-radius: 5px;
     color: #ffffffff;
+    text-align: left;
+    vertical-align: center;
+    line-height: 34px;
+    box-sizing: border-box;
 }
 
 .footer {

@@ -10,6 +10,9 @@ public sealed class ComputedStyle
     public string AlignItems { get; set; } = "stretch";
     public string JustifyContent { get; set; } = "flex-start";
     public string Overflow { get; set; } = "visible";
+    public string TextAlign { get; set; } = "left";
+    public string VerticalAlign { get; set; } = "top";
+    public string BoxSizing { get; set; } = "border-box";
     public float? Width { get; set; }
     public float? Height { get; set; }
     public float? MinWidth { get; set; }
@@ -18,11 +21,22 @@ public sealed class ComputedStyle
     public float? MaxHeight { get; set; }
     public float FlexGrow { get; set; }
     public float Gap { get; set; }
+    public float RowGap { get; set; }
+    public float ColumnGap { get; set; }
     public float Margin { get; set; }
     public float Padding { get; set; }
+    public float MarginTop { get; set; }
+    public float MarginRight { get; set; }
+    public float MarginBottom { get; set; }
+    public float MarginLeft { get; set; }
+    public float PaddingTop { get; set; }
+    public float PaddingRight { get; set; }
+    public float PaddingBottom { get; set; }
+    public float PaddingLeft { get; set; }
     public float Opacity { get; set; } = 1;
     public float BorderRadius { get; set; }
     public float FontSize { get; set; } = 16;
+    public float LineHeight { get; set; }
     public UiColor BackgroundColor { get; set; } = UiColor.Transparent;
     public UiColor Color { get; set; } = UiColor.White;
 
@@ -122,22 +136,47 @@ public sealed class StyleSheet
             else if (key.Equals("align-items", StringComparison.OrdinalIgnoreCase)) style.AlignItems = value;
             else if (key.Equals("justify-content", StringComparison.OrdinalIgnoreCase)) style.JustifyContent = value;
             else if (key.Equals("overflow", StringComparison.OrdinalIgnoreCase)) style.Overflow = value;
+            else if (key.Equals("text-align", StringComparison.OrdinalIgnoreCase)) style.TextAlign = value;
+            else if (key.Equals("vertical-align", StringComparison.OrdinalIgnoreCase)) style.VerticalAlign = value;
+            else if (key.Equals("box-sizing", StringComparison.OrdinalIgnoreCase)) style.BoxSizing = value;
             else if (key.Equals("width", StringComparison.OrdinalIgnoreCase)) style.Width = ParseLength(value);
             else if (key.Equals("height", StringComparison.OrdinalIgnoreCase)) style.Height = ParseLength(value);
             else if (key.Equals("min-width", StringComparison.OrdinalIgnoreCase)) style.MinWidth = ParseLength(value);
             else if (key.Equals("max-width", StringComparison.OrdinalIgnoreCase)) style.MaxWidth = ParseLength(value);
             else if (key.Equals("min-height", StringComparison.OrdinalIgnoreCase)) style.MinHeight = ParseLength(value);
             else if (key.Equals("max-height", StringComparison.OrdinalIgnoreCase)) style.MaxHeight = ParseLength(value);
-            else if (key.Equals("margin", StringComparison.OrdinalIgnoreCase)) style.Margin = ParseLength(value) ?? 0;
-            else if (key.Equals("padding", StringComparison.OrdinalIgnoreCase)) style.Padding = ParseLength(value) ?? 0;
-            else if (key.Equals("gap", StringComparison.OrdinalIgnoreCase)) style.Gap = ParseLength(value) ?? 0;
+            else if (key.Equals("margin", StringComparison.OrdinalIgnoreCase)) ApplyBox(value, (t, r, b, l) => { style.Margin = t; style.MarginTop = t; style.MarginRight = r; style.MarginBottom = b; style.MarginLeft = l; });
+            else if (key.Equals("margin-top", StringComparison.OrdinalIgnoreCase)) style.MarginTop = ParseLength(value) ?? 0;
+            else if (key.Equals("margin-right", StringComparison.OrdinalIgnoreCase)) style.MarginRight = ParseLength(value) ?? 0;
+            else if (key.Equals("margin-bottom", StringComparison.OrdinalIgnoreCase)) style.MarginBottom = ParseLength(value) ?? 0;
+            else if (key.Equals("margin-left", StringComparison.OrdinalIgnoreCase)) style.MarginLeft = ParseLength(value) ?? 0;
+            else if (key.Equals("padding", StringComparison.OrdinalIgnoreCase)) ApplyBox(value, (t, r, b, l) => { style.Padding = t; style.PaddingTop = t; style.PaddingRight = r; style.PaddingBottom = b; style.PaddingLeft = l; });
+            else if (key.Equals("padding-top", StringComparison.OrdinalIgnoreCase)) style.PaddingTop = ParseLength(value) ?? 0;
+            else if (key.Equals("padding-right", StringComparison.OrdinalIgnoreCase)) style.PaddingRight = ParseLength(value) ?? 0;
+            else if (key.Equals("padding-bottom", StringComparison.OrdinalIgnoreCase)) style.PaddingBottom = ParseLength(value) ?? 0;
+            else if (key.Equals("padding-left", StringComparison.OrdinalIgnoreCase)) style.PaddingLeft = ParseLength(value) ?? 0;
+            else if (key.Equals("gap", StringComparison.OrdinalIgnoreCase)) { style.Gap = ParseLength(value) ?? 0; style.RowGap = style.Gap; style.ColumnGap = style.Gap; }
+            else if (key.Equals("row-gap", StringComparison.OrdinalIgnoreCase)) style.RowGap = ParseLength(value) ?? 0;
+            else if (key.Equals("column-gap", StringComparison.OrdinalIgnoreCase)) style.ColumnGap = ParseLength(value) ?? 0;
             else if (key.Equals("flex-grow", StringComparison.OrdinalIgnoreCase)) style.FlexGrow = ParseFloat(value);
             else if (key.Equals("opacity", StringComparison.OrdinalIgnoreCase)) style.Opacity = ParseFloat(value);
             else if (key.Equals("border-radius", StringComparison.OrdinalIgnoreCase)) style.BorderRadius = ParseLength(value) ?? 0;
             else if (key.Equals("font-size", StringComparison.OrdinalIgnoreCase)) style.FontSize = ParseLength(value) ?? 16;
+            else if (key.Equals("line-height", StringComparison.OrdinalIgnoreCase)) style.LineHeight = ParseLength(value) ?? style.FontSize * 1.25f;
             else if (key.Equals("background-color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var bg)) style.BackgroundColor = bg;
             else if (key.Equals("color", StringComparison.OrdinalIgnoreCase) && UiColor.TryParse(value, out var fg)) style.Color = fg;
         }
+    }
+
+    private static void ApplyBox(string value, Action<float, float, float, float> apply)
+    {
+        var values = value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(ParseLength).Select(v => v ?? 0).ToArray();
+        if (values.Length == 0) return;
+        var top = values[0];
+        var right = values.Length > 1 ? values[1] : top;
+        var bottom = values.Length > 2 ? values[2] : top;
+        var left = values.Length > 3 ? values[3] : right;
+        apply(top, right, bottom, left);
     }
 
     private static float? ParseLength(string value) => float.TryParse(value.Trim().TrimEnd('p', 'x'), NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? Math.Max(0, n) : null;

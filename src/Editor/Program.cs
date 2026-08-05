@@ -12,6 +12,7 @@ internal static class Program
         {
             UiSmokeTests.Run();
             Console.WriteLine("Crowbar UI smoke tests passed.");
+            if (Environment.GetEnvironmentVariable("CROWBAR_UI_SMOKE_ONLY") == "1") return;
         }
         using IPlatform platform = new SdlPlatform();
         using IWindow window = platform.CreateWindow(new WindowOptions(

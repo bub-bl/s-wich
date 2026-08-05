@@ -46,17 +46,24 @@ public sealed class YogaLayoutEngine
             MaxWidth = style.MaxWidth ?? YogaValue.Undefined(),
             MinHeight = style.MinHeight ?? YogaValue.Undefined(),
             MaxHeight = style.MaxHeight ?? YogaValue.Undefined(),
-            Padding = style.Padding,
-            Margin = style.Margin,
+            PaddingTop = style.PaddingTop,
+            PaddingRight = style.PaddingRight,
+            PaddingBottom = style.PaddingBottom,
+            PaddingLeft = style.PaddingLeft,
+            MarginTop = style.MarginTop,
+            MarginRight = style.MarginRight,
+            MarginBottom = style.MarginBottom,
+            MarginLeft = style.MarginLeft,
             Overflow = style.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ? YogaOverflow.Hidden : YogaOverflow.Visible,
         };
         node.Data = panel;
-        if (panel.TagName.Equals("text", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(panel.Text))
+        if ((panel.TagName.Equals("text", StringComparison.OrdinalIgnoreCase) || panel is TextInput) && !string.IsNullOrEmpty(panel is TextInput input ? input.Value : panel.Text))
         {
+            var text = panel is TextInput inputValue ? inputValue.Value : panel.Text;
             node.SetMeasureFunction((_, width, _, _, _) => new YogaSize
             {
-                width = Math.Min(width > 0 ? width : float.MaxValue, panel.Text.Length * panel.ComputedStyle.FontSize * 0.56f),
-                height = panel.ComputedStyle.FontSize * 1.25f
+                width = Math.Min(width > 0 ? width : float.MaxValue, text.Length * panel.ComputedStyle.FontSize * 0.56f + panel.ComputedStyle.PaddingLeft + panel.ComputedStyle.PaddingRight),
+                height = (panel.ComputedStyle.LineHeight > 0 ? panel.ComputedStyle.LineHeight : panel.ComputedStyle.FontSize * 1.25f) + panel.ComputedStyle.PaddingTop + panel.ComputedStyle.PaddingBottom
             });
         }
         for (var i = 0; i < panel.Children.Count; i++)
@@ -67,10 +74,10 @@ public sealed class YogaLayoutEngine
     private static YogaNode BuildYogaTree(Panel panel, YogaConfig config, ComputedStyle? parentStyle, int childIndex)
     {
         var node = BuildYogaTree(panel, config);
-        if (parentStyle is not null && childIndex > 0 && parentStyle.Gap > 0)
+        if (parentStyle is not null && childIndex > 0)
         {
-            if (parentStyle.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase)) node.MarginLeft = parentStyle.Gap;
-            else node.MarginTop = parentStyle.Gap;
+            if (parentStyle.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase)) node.MarginLeft = panel.ComputedStyle.MarginLeft + parentStyle.ColumnGap;
+            else node.MarginTop = panel.ComputedStyle.MarginTop + parentStyle.RowGap;
         }
         return node;
     }
