@@ -60,10 +60,14 @@ public static class UiSmokeTests
         input.Render();
         input.ProcessPointerDown(edit.Layout.X + 1, edit.Layout.Y + 1);
         input.ProcessKey(0x43, true);
-        if (edit.Value != "Je t'aimeC") throw new InvalidOperationException("Text input did not append to its existing value.");
+        if (edit.Value != "Je t'aimec") throw new InvalidOperationException("Text input did not preserve lowercase input.");
         input.ProcessPointerDown(edit.Layout.X + 1, edit.Layout.Y + 1);
         input.ProcessKey(0x43, true);
-        if (edit.Value != "Je t'aimeCC") throw new InvalidOperationException("Text input lost its value after refocusing.");
+        if (edit.Value != "Je t'aimecc") throw new InvalidOperationException("Text input lost its value after refocusing.");
+        input.ProcessKey(0x10, true);
+        input.ProcessKey(0x31, true);
+        input.ProcessKey(0x10, false);
+        if (edit.Value != "Je t'aimecc!") throw new InvalidOperationException("Shift symbols were not inserted.");
         input.Dispose();
 
         TestReactiveRazor();
@@ -123,7 +127,7 @@ public static class UiSmokeTests
         ui.Update();
         ui.Render();
         var rerenderedInput = Find(ui.Screen, p => p is TextInput) as TextInput;
-        if (rerenderedInput is null || rerenderedInput.Value != "secondC" || !rerenderedInput.IsFocused)
+        if (rerenderedInput is null || rerenderedInput.Value != "secondc" || !rerenderedInput.IsFocused)
             throw new InvalidOperationException("Razor input lost its value or focus during binding rerender.");
     }
 

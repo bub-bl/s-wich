@@ -85,8 +85,13 @@ public sealed partial class UiSystem
 
     public void ProcessKey(int keyCode, bool isDown, bool isRepeat = false)
     {
-        if (FocusedPanel is TextInput input) input.HandleKey(keyCode, isDown);
-        if (FocusedPanel is not null) KeyChanged?.Invoke(FocusedPanel, new KeyEvent(keyCode, isDown, isRepeat));
+        ProcessKey(new KeyEvent(keyCode, isDown, isRepeat));
+    }
+
+    internal void ProcessKey(KeyEvent keyEvent)
+    {
+        if (FocusedPanel is TextInput input) input.HandleKey(keyEvent.KeyCode, keyEvent.IsDown, keyEvent.Text);
+        if (FocusedPanel is not null) KeyChanged?.Invoke(FocusedPanel, keyEvent);
     }
 
     private static IEnumerable<TextInput> Inputs(Panel panel)

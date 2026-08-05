@@ -36,7 +36,7 @@ internal static class Program
             else ui.ProcessPointerUp(e.X, e.Y, (int)e.Button);
         };
         window.PointerWheelChanged += e => ui.ProcessPointerWheel(e.X, e.Y, e.DeltaX, e.DeltaY);
-        window.KeyChanged += e => ui.ProcessKey(e.KeyCode, e.IsDown, e.IsRepeat);
+        window.KeyChanged += e => ui.ProcessKey(e);
 
         window.Loaded += () =>
         {

@@ -59,12 +59,12 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
             {
                 _previousKeys[key] = down;
                 _nextKeyRepeat[key] = down ? now + KeyRepeatDelaySeconds : 0;
-                KeyChanged?.Invoke(new KeyEvent(key, down, false));
+                KeyChanged?.Invoke(new KeyEvent(key, down, false, down ? TranslateKey(key) : null));
             }
             else if (down && now >= _nextKeyRepeat[key])
             {
                 _nextKeyRepeat[key] = now + KeyRepeatIntervalSeconds;
-                KeyChanged?.Invoke(new KeyEvent(key, true, true));
+                KeyChanged?.Invoke(new KeyEvent(key, true, true, TranslateKey(key)));
             }
         }
     }
@@ -73,8 +73,24 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
     private static readonly int[] ButtonKeys = [0x01, 0x02, 0x04, 0x05, 0x06];
 
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] private static extern int GetKeyboardState(byte[] keyState);
+    [DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
+    [DllImport("user32.dll")] private static extern nint GetKeyboardLayout(uint idThread);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int ToUnicodeEx(uint virtualKey, uint scanCode, byte[] keyState, [Out] char[] characters, int characterCount, uint flags, nint keyboardLayout);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point point);
     [DllImport("user32.dll")] private static extern bool ScreenToClient(nint window, ref Point point);
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X; public int Y; }
+
+    private static string? TranslateKey(int key)
+    {
+        var state = new byte[256];
+        if (GetKeyboardState(state) == 0) return null;
+
+        var characters = new char[8];
+        var count = ToUnicodeEx((uint)key, MapVirtualKey((uint)key, 0), state, characters, characters.Length, 0, GetKeyboardLayout(0));
+        if (count <= 0) return null;
+        return new string(characters, 0, count);
+    }
 }

@@ -25,6 +25,7 @@ public class TextInput : Panel
     public int CaretIndex { get; private set; }
     internal bool CaretVisible { get; private set; } = true;
     private float _caretTime;
+    private bool _shiftDown;
     public event Action<string>? ValueChanged;
     public void SetValue(string value) => SetValue(value, value.Length);
     internal void SetValue(string value, int caretIndex)
@@ -50,8 +51,13 @@ public class TextInput : Panel
         _caretTime += Math.Max(0, deltaTime);
         if (_caretTime >= 0.5f) { _caretTime = 0; CaretVisible = !CaretVisible; Invalidate(); }
     }
-    internal void HandleKey(int keyCode, bool isDown)
+    internal void HandleKey(int keyCode, bool isDown, string? text = null)
     {
+        if (keyCode is 0x10 or 0xA0 or 0xA1)
+        {
+            _shiftDown = isDown;
+            return;
+        }
         if (!isDown) return;
         if (keyCode == 0x25) CaretIndex = Math.Max(0, CaretIndex - 1);
         else if (keyCode == 0x27) CaretIndex = Math.Min(Value.Length, CaretIndex + 1);
@@ -59,8 +65,18 @@ public class TextInput : Panel
         else if (keyCode == 0x23) CaretIndex = Value.Length;
         else if (keyCode == 0x08 && CaretIndex > 0) { var caret = CaretIndex - 1; SetValue(Value.Remove(caret, 1), caret); }
         else if (keyCode == 0x2E && CaretIndex < Value.Length) SetValue(Value.Remove(CaretIndex, 1), CaretIndex);
+        else if (!string.IsNullOrEmpty(text))
+        {
+            foreach (var character in text.Where(c => !char.IsControl(c))) Insert(character);
+        }
         else if (keyCode == 0x20) Insert(' ');
-        else if (keyCode is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A) Insert((char)keyCode);
+        else if (keyCode is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A)
+        {
+            var character = keyCode is >= 0x41 and <= 0x5A
+                ? (char)(keyCode + (_shiftDown ? 0 : 'a' - 'A'))
+                : (_shiftDown ? " )!@#$%^&*("[keyCode - 0x2F] : (char)keyCode);
+            Insert(character);
+        }
         CaretVisible = true; _caretTime = 0; Invalidate();
     }
     private void Insert(char value) { Value = Value.Insert(CaretIndex++, value.ToString()); ValueChanged?.Invoke(Value); Invalidate(); }
