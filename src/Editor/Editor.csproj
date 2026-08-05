@@ -20,9 +20,9 @@
     <None Update="Ui\**\*.css" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-    <!-- Razor's design-time declaration uses the hosting metadata types. Keep
-         this reference design-time-only; the runtime compiler remains custom. -->
-  <ItemGroup Condition="'$(DesignTimeBuild)' == 'true'">
+  <!-- Provides the standard Razor component reference surface to the IDE.
+       The runtime compiler remains custom and does not use ASP.NET rendering. -->
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
@@ -31,7 +31,18 @@
       Razor SDK still receives the files during design-time builds, which gives
       IDEs a generated declaration/context for completion and diagnostics.
     -->
-  <ItemGroup Condition="'$(DesignTimeBuild)' == 'true'">
+  <ItemGroup>
     <RazorComponent Include="Ui\**\*.razor" />
   </ItemGroup>
+
+  <!-- The IDE keeps the RazorComponent item for language services. During a
+       normal build remove it before the Razor SDK resolves its inputs; the
+       runtime RazorComponentFactory remains the actual compiler. -->
+  <Target Name="CrowbarDisableRazorBuildItems"
+          BeforeTargets="ResolveRazorComponentInputs"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <RazorComponent Remove="Ui\**\*.razor" />
+    </ItemGroup>
+  </Target>
 </Project>

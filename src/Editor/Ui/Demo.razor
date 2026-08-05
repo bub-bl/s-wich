@@ -12,17 +12,17 @@
     <div class="separator"></div>
 
     <div class="row">
-      <button class="action" @onclick="Increment">CLICKED @count TIMES</button>
-      <div class="status">SCREEN PANEL ACTIVE · RENDER @renderCount</div>
+        <button class="action" @onclick="Increment">CLICKED @count TIMES</button>
+        <div class="status">SCREEN PANEL ACTIVE · RENDER @renderCount</div>
     </div>
 
     @if (count > 0)
     {
-      <div class="status">LAST ACTION REGISTERED</div>
+        <div class="status">LAST ACTION REGISTERED</div>
     }
 
     <div class="field-label">INPUT FIELD</div>
-    <input class="field" value="Type input here" @bind-value="name" />
+    <input class="field" value="Type input here" @bind-value="name"/>
     <div class="status">@name</div>
 
     <div class="footer">@pipelineLabel</div>
@@ -44,4 +44,5 @@
     {
         count++;
     }
+
 }

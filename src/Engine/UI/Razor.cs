@@ -71,7 +71,12 @@ public abstract class RazorPanel : PanelComponent
 
     private static object? ConvertParameter(string value, Type type) =>
         type == typeof(string) ? value : Convert.ChangeType(value, Nullable.GetUnderlyingType(type) ?? type);
-    public abstract Task ExecuteAsync();
+    // The Razor SDK generates a design-time declaration for .razor files.
+    // That declaration contains the component shape but not the generated
+    // ExecuteAsync body, so the base must remain instantiable from the IDE's
+    // point of view. Runtime-compiled components override this method with
+    // the real Razor output.
+    public virtual Task ExecuteAsync() => Task.CompletedTask;
 }
 
 /// <summary>Compatibility name for components compiled by earlier versions.</summary>
