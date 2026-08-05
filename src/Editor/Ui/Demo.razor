@@ -1,3 +1,10 @@
+@inherits Crowbar.Engine.UI.RazorPanel
+@using System
+@using System.Text
+@namespace Crowbar.Editor.Ui
+
+@{ var pipelineLabel = new StringBuilder("Rendered by RazorPanel + Skia").ToString(); }
+
 <div class="card">
     <div class="title">Crowbar Razor UI</div>
     <div class="subtitle">Razor + Yoga + Skia + WebGPU</div>
@@ -6,7 +13,7 @@
 
     <div class="row">
       <button class="action" @onclick="Increment">CLICKED @count TIMES</button>
-      <div class="status">SCREEN PANEL ACTIVE</div>
+      <div class="status">SCREEN PANEL ACTIVE · RENDER @renderCount</div>
     </div>
 
     @if (count > 0)
@@ -18,12 +25,20 @@
     <input class="field" value="Type input here" @bind-value="name" />
     <div class="status">@name</div>
 
-    <div class="footer">Rendered by the native Crowbar UI pipeline</div>
+    <div class="footer">@pipelineLabel</div>
 </div>
 
 @code {
     private int count;
     private string name = "Type input here";
+    private int renderCount;
+
+    protected override int BuildHash() => HashCode.Combine(count, name);
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        renderCount++;
+    }
 
     private void Increment()
     {

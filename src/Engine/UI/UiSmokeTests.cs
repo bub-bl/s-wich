@@ -116,7 +116,9 @@ public static class UiSmokeTests
         ui.LoadRazor(@"
 @inherits Crowbar.Engine.UI.RazorSmokeBase
 @implements Crowbar.Engine.UI.IRazorSmokeContract
-@{ var inline = ""inline""; }
+@using System.Text
+@namespace Crowbar.Engine.UI.Smoke.Generated
+@{ var inline = new StringBuilder(""inline"").ToString(); }
 <div><span>@inline</span><span>@BuildVersion</span></div>
 @code {
     protected override void OnInitialized() { base.OnInitialized(); }
@@ -126,7 +128,7 @@ public static class UiSmokeTests
         ui.Screen.SetViewport(320, 120);
         ui.Renderer.Resize(320, 120);
         ui.Render();
-        if (ui.Content is not RazorSmokeBase component || component is not IRazorSmokeContract)
+        if (ui.Content is not RazorSmokeBase component || component is not IRazorSmokeContract || component.GetType().Namespace != "Crowbar.Engine.UI.Smoke.Generated")
             throw new InvalidOperationException("Razor @inherits/@implements failed.");
         if (component.InitializedCount != 1 || component.ParametersCount != 1 || component.AfterRenderCount != 1)
             throw new InvalidOperationException("Razor lifecycle initial ordering failed.");

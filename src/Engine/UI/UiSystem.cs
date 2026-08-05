@@ -7,10 +7,10 @@ public sealed partial class UiSystem : IDisposable
     public Panel? Content { get; private set; }
     public StyleSheet? StyleSheet { get; private set; }
     public bool IsDirty => Renderer.IsDirty || Screen.LayoutDirty || Screen.Layout is { Width: 0 };
-    private RazorTemplateBase? _razorRoot;
+    private RazorPanel? _razorRoot;
     private RazorComponentFactory? _razorFactory;
     private bool _razorRenderPending;
-    private readonly Dictionary<string, Func<RazorTemplateBase>> _razorComponents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Func<RazorPanel>> _razorComponents = new(StringComparer.OrdinalIgnoreCase);
 
     public void RegisterRazorComponent(string tagName, string source, string className)
     {
