@@ -26,7 +26,17 @@ public class TextInput : Panel
     internal bool CaretVisible { get; private set; } = true;
     private float _caretTime;
     public event Action<string>? ValueChanged;
-    public void SetValue(string value) { Value = value; CaretIndex = Math.Clamp(value.Length, 0, value.Length); ValueChanged?.Invoke(value); Invalidate(); }
+    public void SetValue(string value) => SetValue(value, value.Length);
+    internal void SetValue(string value, int caretIndex)
+    {
+        var nextCaret = Math.Clamp(caretIndex, 0, value.Length);
+        if (Value == value && CaretIndex == nextCaret) return;
+        Value = value;
+        CaretIndex = nextCaret;
+        ValueChanged?.Invoke(value);
+        Invalidate();
+    }
+    internal void FocusAtEnd() { CaretIndex = Value.Length; CaretVisible = true; _caretTime = 0; Invalidate(); }
     internal void AdvanceCaret(float deltaTime)
     {
         if (!IsFocused) { CaretVisible = false; _caretTime = 0; return; }
@@ -40,8 +50,8 @@ public class TextInput : Panel
         else if (keyCode == 0x27) CaretIndex = Math.Min(Value.Length, CaretIndex + 1);
         else if (keyCode == 0x24) CaretIndex = 0;
         else if (keyCode == 0x23) CaretIndex = Value.Length;
-        else if (keyCode == 0x08 && CaretIndex > 0) SetValue(Value.Remove(--CaretIndex, 1));
-        else if (keyCode == 0x2E && CaretIndex < Value.Length) SetValue(Value.Remove(CaretIndex, 1));
+        else if (keyCode == 0x08 && CaretIndex > 0) { var caret = CaretIndex - 1; SetValue(Value.Remove(caret, 1), caret); }
+        else if (keyCode == 0x2E && CaretIndex < Value.Length) SetValue(Value.Remove(CaretIndex, 1), CaretIndex);
         else if (keyCode == 0x20) Insert(' ');
         else if (keyCode is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A) Insert((char)keyCode);
         CaretVisible = true; _caretTime = 0; Invalidate();

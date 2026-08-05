@@ -15,12 +15,32 @@ public sealed class ParameterAttribute : Attribute { }
 public abstract class RazorPanel : PanelComponent
 {
     private readonly StringBuilder _output = new();
+    private string _attributeSuffix = string.Empty;
     private readonly Dictionary<string, RazorPanel> _childComponents = new(StringComparer.Ordinal);
     private readonly HashSet<string> _activeChildren = new(StringComparer.Ordinal);
     private bool _initialized;
 
     protected void WriteLiteral(string value) => _output.Append(value);
     protected void Write(object? value) => _output.Append(System.Net.WebUtility.HtmlEncode(value?.ToString() ?? string.Empty));
+
+    // Helpers emitted by Razor for attributes containing C# expressions,
+    // e.g. value="@name". The native renderer still receives plain markup;
+    // these methods only reproduce the small writer contract needed by the
+    // generated Razor class.
+    protected void BeginWriteAttribute(string name, string prefix, int prefixOffset, string suffix, int suffixOffset, int attributeValuesCount)
+    {
+        _attributeSuffix = suffix;
+        _output.Append(prefix);
+    }
+
+    protected void WriteAttributeValue(string prefix, int prefixOffset, object? value, int valueOffset, int valueLength, bool isLiteral)
+    {
+        _output.Append(prefix);
+        var text = value?.ToString() ?? string.Empty;
+        _output.Append(isLiteral ? text : System.Net.WebUtility.HtmlEncode(text));
+    }
+
+    protected void EndWriteAttribute() => _output.Append(_attributeSuffix);
 
     protected virtual void OnInitialized() { }
     protected virtual void OnParametersSet() { }
@@ -267,13 +287,14 @@ internal static class HtmlPanelParser
     public static PanelComponent Parse(string markup, RazorPanel root, IReadOnlyDictionary<string, Func<RazorPanel>>? components = null)
     {
         root.TagName = "root";
+        var preservedInputs = FindInputs(root);
         root.ClearChildren();
         if (string.IsNullOrWhiteSpace(markup)) return root;
         try
         {
             var xml = XDocument.Parse("<root>" + markup + "</root>", LoadOptions.PreserveWhitespace);
             var index = 0;
-            foreach (var node in xml.Root!.Nodes()) AddNode(root, node, root, components, $"root/{index++}");
+            foreach (var node in xml.Root!.Nodes()) AddNode(root, node, root, components, $"root/{index++}", preservedInputs);
             return root;
         }
         catch (Exception ex)
@@ -282,7 +303,20 @@ internal static class HtmlPanelParser
         }
     }
 
-    private static void AddNode(Panel parent, XNode node, RazorPanel runtime, IReadOnlyDictionary<string, Func<RazorPanel>>? components, string key)
+    private static Dictionary<string, TextInput> FindInputs(Panel root)
+    {
+        var result = new Dictionary<string, TextInput>(StringComparer.Ordinal);
+        Visit(root, "root", result);
+        return result;
+
+        static void Visit(Panel panel, string key, Dictionary<string, TextInput> result)
+        {
+            if (panel is TextInput input) result[key] = input;
+            for (var i = 0; i < panel.Children.Count; i++) Visit(panel.Children[i], $"{key}/{i}", result);
+        }
+    }
+
+    private static void AddNode(Panel parent, XNode node, RazorPanel runtime, IReadOnlyDictionary<string, Func<RazorPanel>>? components, string key, IReadOnlyDictionary<string, TextInput> preservedInputs)
     {
         if (node is XText text && !string.IsNullOrWhiteSpace(text.Value))
         {
@@ -314,19 +348,22 @@ internal static class HtmlPanelParser
         };
         panel.TagName = element.Name.LocalName;
         string? click = null, change = null, bind = null;
+        string? declaredValue = null;
         foreach (var attribute in element.Attributes())
         {
             if (attribute.Name == "class") foreach (var c in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)) panel.AddClass(c);
             else if (attribute.Name == "id") panel.Id = attribute.Value;
             else if (attribute.Name == "style") foreach (var declaration in attribute.Value.Split(';')) { var p = declaration.Split(':', 2); if (p.Length == 2) panel.SetInlineStyle(p[0].Trim(), p[1].Trim()); }
-            else if (attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase) && panel is TextInput input) input.SetValue(attribute.Value);
+            else if (attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase) && panel is TextInput) declaredValue = attribute.Value;
             else if (attribute.Name.LocalName.Equals("data-codex-onclick", StringComparison.OrdinalIgnoreCase)) click = attribute.Value;
             else if (attribute.Name.LocalName.Equals("data-codex-onchange", StringComparison.OrdinalIgnoreCase)) change = attribute.Value;
             else if (attribute.Name.LocalName.Equals("data-codex-bind-value", StringComparison.OrdinalIgnoreCase)) bind = attribute.Value;
             else panel.Attributes[attribute.Name.LocalName] = attribute.Value;
         }
         var childIndex = 0;
-        foreach (var child in element.Nodes()) AddNode(panel, child, runtime, components, $"{key}/{childIndex++}");
+        foreach (var child in element.Nodes()) AddNode(panel, child, runtime, components, $"{key}/{childIndex++}", preservedInputs);
+        if (panel is TextInput inputValue)
+            inputValue.SetValue(preservedInputs.TryGetValue(key, out var previous) ? previous.Value : declaredValue ?? string.Empty);
         if (panel is Button button && click is not null) button.Clicked += e => RazorEventInvoker.Invoke(runtime, click, e);
         if (panel is TextInput textInput)
         {

@@ -27,6 +27,7 @@ public sealed partial class UiSystem
         var hit = ProcessPointerMove(x, y);
         if (hit is null || !hit.IsEnabled) return null;
         UpdateFocus(hit);
+        if (hit is TextInput textInput) textInput.FocusAtEnd();
         UpdatePressedPath(hit, true);
         var e = new UiPointerEvent(x, y, button);
         PointerDown?.Invoke(hit, e);

@@ -43,6 +43,18 @@ public static class UiSmokeTests
         if (button.IsPressed) throw new InvalidOperationException("UI active state was not cleared.");
         input.ProcessPointerMove(319, 199);
         if (button.IsHovered) throw new InvalidOperationException("UI hover exit was not routed.");
+        var edit = new TextInput();
+        edit.SetInlineStyle("width", "160px");
+        edit.SetInlineStyle("height", "32px");
+        edit.SetValue("Je t'aime");
+        input.Screen.AddChild(edit);
+        input.Render();
+        input.ProcessPointerDown(edit.Layout.X + 1, edit.Layout.Y + 1);
+        input.ProcessKey(0x43, true);
+        if (edit.Value != "Je t'aimeC") throw new InvalidOperationException("Text input did not append to its existing value.");
+        input.ProcessPointerDown(edit.Layout.X + 1, edit.Layout.Y + 1);
+        input.ProcessKey(0x43, true);
+        if (edit.Value != "Je t'aimeCC") throw new InvalidOperationException("Text input lost its value after refocusing.");
         input.Dispose();
 
         TestReactiveRazor();
