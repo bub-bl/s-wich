@@ -58,16 +58,48 @@ public static class UiSmokeTests
         edit.SetValue("Je t'aime");
         input.Screen.AddChild(edit);
         input.Render();
-        input.ProcessPointerDown(edit.Layout.X + 1, edit.Layout.Y + 1);
+        input.ProcessPointerDown(edit.Layout.Right - 1, edit.Layout.Y + 1);
         input.ProcessKey(0x43, true);
         if (edit.Value != "Je t'aimec") throw new InvalidOperationException("Text input did not preserve lowercase input.");
-        input.ProcessPointerDown(edit.Layout.X + 1, edit.Layout.Y + 1);
+        input.ProcessPointerDown(edit.Layout.Right - 1, edit.Layout.Y + 1);
         input.ProcessKey(0x43, true);
         if (edit.Value != "Je t'aimecc") throw new InvalidOperationException("Text input lost its value after refocusing.");
         input.ProcessKey(0x10, true);
         input.ProcessKey(0x31, true);
         input.ProcessKey(0x10, false);
         if (edit.Value != "Je t'aimecc!") throw new InvalidOperationException("Shift symbols were not inserted.");
+        input.ProcessKey(0x11, true);
+        input.ProcessKey(0x41, true);
+        input.ProcessKey(0x11, false);
+        if (!edit.HasSelection || edit.SelectionStart != 0 || edit.SelectionEnd != edit.Value.Length)
+            throw new InvalidOperationException("Ctrl+A did not select the complete input.");
+        input.ProcessKey(0x08, true);
+        if (edit.Value != string.Empty) throw new InvalidOperationException("Backspace did not delete the selection.");
+        edit.SetValue("one two three");
+        input.ProcessPointerDown(edit.Layout.Right - 1, edit.Layout.Y + 1);
+        input.ProcessKey(0x11, true);
+        input.ProcessKey(0x08, true);
+        input.ProcessKey(0x11, false);
+        if (edit.Value != "one two ") throw new InvalidOperationException("Ctrl+Backspace did not delete one word.");
+        edit.SetValue("select me");
+        using (var testFont = new SkiaSharp.SKFont { Size = edit.ComputedStyle.FontSize })
+        {
+            var targetX = edit.Layout.X + edit.ComputedStyle.PaddingLeft + testFont.MeasureText("select");
+            input.ProcessPointerDown(edit.Layout.X + edit.ComputedStyle.PaddingLeft + 1, edit.Layout.Y + 1);
+            input.ProcessPointerMove(targetX, edit.Layout.Y + 1);
+            input.ProcessPointerUp(targetX, edit.Layout.Y + 1);
+        }
+        if (!edit.HasSelection) throw new InvalidOperationException("Mouse drag did not select text.");
+
+        edit.SetValue("a   b");
+        using (var testFont = new SkiaSharp.SKFont { Size = edit.ComputedStyle.FontSize })
+        {
+            // Click right on character 'b' (which is at prefix "a   ")
+            var clickXOnB = edit.Layout.X + edit.ComputedStyle.PaddingLeft + testFont.MeasureText("a   ") + 2;
+            input.ProcessPointerDown(clickXOnB, edit.Layout.Y + 1);
+            input.ProcessPointerUp(clickXOnB, edit.Layout.Y + 1);
+            if (edit.CaretIndex != 4) throw new InvalidOperationException($"Click near 'b' after spaces set CaretIndex to {edit.CaretIndex} instead of 4.");
+        }
         input.Dispose();
 
         TestReactiveRazor();
@@ -122,7 +154,7 @@ public static class UiSmokeTests
         var child = Find(ui.Screen, p => p.Text == "Child component") is not null;
         if (!bound || !changed || !child)
             throw new InvalidOperationException($"Razor binding test failed (bound={bound}, onchange={changed}, child={child}).");
-        ui.ProcessPointerDown(textInput.Layout.X + 1, textInput.Layout.Y + 1);
+        ui.ProcessPointerDown(textInput.Layout.Right - 1, textInput.Layout.Y + 1);
         ui.ProcessKey(0x43, true);
         ui.Update();
         ui.Render();

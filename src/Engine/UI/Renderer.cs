@@ -78,13 +78,15 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
         using var paint = new SKPaint { Color = new SKColor(style.Color.R, style.Color.G, style.Color.B, alpha), IsAntialias = true };
         using var font = new SKFont { Size = style.FontSize };
         var metrics = font.Metrics;
-        var lines = WrapText(text, font, contentWidth);
+        var lines = panel is TextInput ? [text] : WrapText(text, font, contentWidth);
         var blockHeight = lines.Count * lineHeight;
         var y = style.VerticalAlign.Equals("center", StringComparison.OrdinalIgnoreCase)
             ? top + Math.Max(0, (contentHeight - blockHeight) / 2)
             : style.VerticalAlign.Equals("bottom", StringComparison.OrdinalIgnoreCase)
                 ? top + Math.Max(0, contentHeight - blockHeight)
                 : top;
+
+        float firstLineX = left;
 
         foreach (var line in lines)
         {
@@ -94,17 +96,27 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
                 : style.TextAlign.Equals("right", StringComparison.OrdinalIgnoreCase)
                     ? left + Math.Max(0, contentWidth - measured)
                     : left;
+            firstLineX = x;
             // Skia reçoit une baseline, pas le sommet du texte. La position doit
             // donc tenir compte de la hauteur de la ligne pour que le glyphe soit
             // réellement centré dans un input ou un bouton.
             var baseline = y + lineHeight / 2f - (metrics.Ascent + metrics.Descent) / 2f;
+            if (panel is TextInput selectionInput && selectionInput.HasSelection && line == text)
+            {
+                var selectionStart = Math.Min(selectionInput.SelectionStart, selectionInput.SelectionEnd);
+                var selectionEnd = Math.Max(selectionInput.SelectionStart, selectionInput.SelectionEnd);
+                var selectionLeft = x + font.MeasureText(text[..selectionStart]);
+                var selectionRight = x + font.MeasureText(text[..selectionEnd]);
+                using var selectionPaint = new SKPaint { Color = new SKColor(50, 120, 220, alpha), IsAntialias = true };
+                canvas.DrawRect(selectionLeft, y, selectionRight, y + lineHeight, selectionPaint);
+            }
             canvas.DrawText(line, x, baseline, SKTextAlign.Left, font, paint);
             y += lineHeight;
         }
 
         if (panel is TextInput input && input.IsFocused && input.CaretVisible && lines.Count == 1)
         {
-            var caretX = left + font.MeasureText(input.Value[..Math.Clamp(input.CaretIndex, 0, input.Value.Length)]);
+            var caretX = firstLineX + font.MeasureText(input.Value[..Math.Clamp(input.CaretIndex, 0, input.Value.Length)]);
             using var caretPaint = new SKPaint { Color = paint.Color, StrokeWidth = 1.5f, IsAntialias = true };
             canvas.DrawLine(caretX, top + 3, caretX, top + Math.Max(font.Size + 3, contentHeight - 3), caretPaint);
         }
@@ -117,7 +129,7 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
         foreach (var rawLine in text.Split('\n'))
         {
             var current = string.Empty;
-            foreach (var word in rawLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var word in rawLine.Split(' '))
             {
                 var candidate = string.IsNullOrEmpty(current) ? word : current + " " + word;
                 if (!string.IsNullOrEmpty(current) && font.MeasureText(candidate) > width)

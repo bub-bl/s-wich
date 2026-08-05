@@ -18,6 +18,7 @@ public sealed partial class UiSystem
         var hit = Screen.HitTest(x / Math.Max(0.01f, Screen.Scale), y / Math.Max(0.01f, Screen.Scale));
         UpdateHoverPath(hit);
         _hovered = hit;
+        if (_captured is TextInput textInput) textInput.UpdatePointerSelection(x / Math.Max(0.01f, Screen.Scale));
         if (hit is not null) PointerMoved?.Invoke(hit, new UiPointerEvent(x, y));
         return hit;
     }
@@ -27,12 +28,12 @@ public sealed partial class UiSystem
         var hit = ProcessPointerMove(x, y);
         if (hit is null || !hit.IsEnabled) return null;
         UpdateFocus(hit);
-        if (hit is TextInput textInput) textInput.FocusAtEnd();
+        if (hit is TextInput textInput && button == 0) textInput.BeginPointerSelection(x / Math.Max(0.01f, Screen.Scale));
         UpdatePressedPath(hit, true);
         var e = new UiPointerEvent(x, y, button);
         PointerDown?.Invoke(hit, e);
         for (var current = hit; current is not null; current = current.Parent) current.RaisePointerDown(e);
-        _captured = hit is Button ? hit : null;
+        _captured = hit is Button or TextInput ? hit : null;
         for (var current = hit; current is not null; current = current.Parent)
             if (current is Button buttonPanel) { buttonPanel.RaiseClicked(e); break; }
         return hit;
@@ -48,6 +49,7 @@ public sealed partial class UiSystem
             for (var current = hit; current is not null; current = current.Parent) current.RaisePointerUp(e);
         }
         UpdatePressedPath(_captured ?? hit, false);
+        if (_captured is TextInput textInput && button == 0) textInput.EndPointerSelection();
         _captured = null;
         return hit;
     }
