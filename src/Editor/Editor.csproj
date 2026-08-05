@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net11.0</TargetFramework>
@@ -7,11 +7,31 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Crowbar.Editor</AssemblyName>
     <RootNamespace>Crowbar.Editor</RootNamespace>
+    <RazorCompileOnBuild>false</RazorCompileOnBuild>
+    <RazorCompileOnPublish>false</RazorCompileOnPublish>
+    <UseRazorSourceGenerator>false</UseRazorSourceGenerator>
+    <EnableDefaultRazorComponentItems>false</EnableDefaultRazorComponentItems>
+    <RazorLangVersion>Latest</RazorLangVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Engine\Engine.csproj" />
-    <None Include="Ui\**\*.razor" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Ui\**\*.css" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Ui\**\*.razor" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Ui\**\*.css" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+    <!-- Razor's design-time declaration uses the hosting metadata types. Keep
+         this reference design-time-only; the runtime compiler remains custom. -->
+  <ItemGroup Condition="'$(DesignTimeBuild)' == 'true'">
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+    <!--
+      Keep the custom runtime compiler authoritative during normal builds. The
+      Razor SDK still receives the files during design-time builds, which gives
+      IDEs a generated declaration/context for completion and diagnostics.
+    -->
+  <ItemGroup Condition="'$(DesignTimeBuild)' == 'true'">
+    <RazorComponent Include="Ui\**\*.razor" />
   </ItemGroup>
 </Project>
