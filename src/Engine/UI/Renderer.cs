@@ -108,7 +108,7 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
                 var selectionLeft = x + font.MeasureText(text[..selectionStart]);
                 var selectionRight = x + font.MeasureText(text[..selectionEnd]);
                 using var selectionPaint = new SKPaint { Color = new SKColor(50, 120, 220, alpha), IsAntialias = true };
-                canvas.DrawRect(selectionLeft, y, selectionRight, y + lineHeight, selectionPaint);
+                canvas.DrawRect(new SKRect(selectionLeft, y, selectionRight, y + lineHeight), selectionPaint);
             }
             canvas.DrawText(line, x, baseline, SKTextAlign.Left, font, paint);
             y += lineHeight;
