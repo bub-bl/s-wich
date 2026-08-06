@@ -117,11 +117,12 @@ public static class UiSmokeTests
 ", "CounterLabel");
         ui.LoadRazor(@"
 <div class=""root"">
-  <button @onclick=""Increment"">Count: @count</button>
+  <button @onclick=""@Increment"">Count: @count</button>
+  <button @onclick=""@(() => Increment())"">LambdaCount: @count</button>
   <CounterLabel Label=""Child component"" />
   @if (count > 0) { <label>Visible</label> }
   @foreach (var item in items) { <span>@item</span> }
-  <input value=""first"" @onchange=""Changed"" @bind-value=""name"" />
+  <input value=""first"" @onchange=""Changed"" @bind-value=""@name"" />
   <label>@name</label>
   @if (changed) { <label>Changed</label> }
 </div>
