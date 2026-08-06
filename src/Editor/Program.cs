@@ -23,12 +23,9 @@ internal static class Program
         WebGpuContext? webGpu = null;
         using var ui = new UiSystem();
         var razorPath = ResolveUiFile("Demo.razor");
-        var stylePath = ResolveUiFile("Demo.css");
         Console.WriteLine($"Razor UI source: {razorPath}");
-        Console.WriteLine($"Razor UI styles: {stylePath}");
-        ui.LoadRazor(File.ReadAllText(razorPath), "Demo");
-        ui.LoadStyles(File.ReadAllText(stylePath));
-        ui.WatchFiles(razorPath, stylePath, "Demo");
+        ui.LoadRazorFromFile(razorPath, "Demo");
+        ui.WatchFiles(razorPath, className: "Demo");
         window.PointerMoved += e => ui.ProcessPointerMove(e.X, e.Y);
         window.PointerButtonChanged += e =>
         {

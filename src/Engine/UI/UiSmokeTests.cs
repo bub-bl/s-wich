@@ -104,6 +104,40 @@ public static class UiSmokeTests
 
         TestReactiveRazor();
         TestRazorDirectivesAndLifecycle();
+        TestScopedRazorCss();
+    }
+
+    private static void TestScopedRazorCss()
+    {
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("ChildComp", @"
+<div class=""box""><span class=""scoped-label"">Child</span></div>
+", "ChildComp", cssSource: @"
+.box { width: 50px; }
+.scoped-label { color: #00ff00ff; }
+");
+        ui.LoadRazor(@"
+<div class=""parent-box"">
+  <span class=""scoped-label"">Parent</span>
+  <ChildComp />
+</div>
+", className: "ParentComp", cssSource: @"
+.scoped-label { color: #ff0000ff; }
+");
+        ui.Screen.SetViewport(320, 200);
+        ui.Renderer.Resize(320, 200);
+        ui.Render();
+
+        var parentLabel = Find(ui.Screen, p => p.Text == "Parent");
+        var childLabel = Find(ui.Screen, p => p.Text == "Child");
+        if (parentLabel is null || childLabel is null)
+            throw new InvalidOperationException("Scoped CSS smoke test markup failed.");
+
+        if (parentLabel.ComputedStyle.Color != new UiColor(255, 0, 0, 255))
+            throw new InvalidOperationException($"Parent label did not receive parent scoped style (color={parentLabel.ComputedStyle.Color}).");
+
+        if (childLabel.ComputedStyle.Color != new UiColor(0, 255, 0, 255))
+            throw new InvalidOperationException($"Child label did not receive child scoped style (color={childLabel.ComputedStyle.Color}).");
     }
 
     private static void TestReactiveRazor()

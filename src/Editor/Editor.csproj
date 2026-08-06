@@ -12,12 +12,17 @@
     <UseRazorSourceGenerator>false</UseRazorSourceGenerator>
     <EnableDefaultRazorComponentItems>false</EnableDefaultRazorComponentItems>
     <RazorLangVersion>Latest</RazorLangVersion>
+    <ScopedCssEnabled>false</ScopedCssEnabled>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Engine\Engine.csproj" />
     <Content Update="Ui\**\*.razor" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Ui\**\*.css" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Ui\Components\Button.razor.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <DependentUpon>Button.razor</DependentUpon>
+    </None>
   </ItemGroup>
 
   <!-- Provides the standard Razor component reference surface to the IDE.

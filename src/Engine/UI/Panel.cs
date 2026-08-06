@@ -16,6 +16,8 @@ public class Panel
     private bool _isChecked;
     internal bool LayoutDirty { get; private set; } = true;
 
+    private readonly HashSet<string> _scopeIds = new(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlySet<string> ScopeIds => _scopeIds;
     public Panel? Parent { get; private set; }
     public IReadOnlyList<Panel> Children => new ReadOnlyCollection<Panel>(_children);
     public string TagName { get; set; } = "div";
@@ -24,6 +26,17 @@ public class Panel
     public Dictionary<string, string> Attributes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> InlineStyle { get; } = new(StringComparer.OrdinalIgnoreCase);
     public string Text { get; set; } = string.Empty;
+
+    public void AddScope(string scopeId)
+    {
+        if (string.IsNullOrWhiteSpace(scopeId)) return;
+        if (_scopeIds.Add(scopeId))
+        {
+            Attributes[scopeId] = string.Empty;
+            Invalidate();
+        }
+    }
+    public bool HasScope(string scopeId) => !string.IsNullOrEmpty(scopeId) && _scopeIds.Contains(scopeId);
     public ComputedStyle ComputedStyle { get; internal set; } = new();
     public UiRect Layout { get; internal set; }
     public bool IsVisible { get; set; } = true;

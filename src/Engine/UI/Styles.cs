@@ -91,9 +91,18 @@ public sealed record StyleRule(string Selector, IReadOnlyDictionary<string, stri
         var ancestor = panel.Parent;
         for (var i = parts.Length - 2; i >= 0; i--)
         {
-            while (ancestor is not null && !MatchesSimple(parts[i], ancestor)) ancestor = ancestor.Parent;
-            if (ancestor is null) return false;
-            ancestor = ancestor.Parent;
+            if (parts[i] == ">")
+            {
+                i--;
+                if (i < 0 || ancestor is null || !MatchesSimple(parts[i], ancestor)) return false;
+                ancestor = ancestor.Parent;
+            }
+            else
+            {
+                while (ancestor is not null && !MatchesSimple(parts[i], ancestor)) ancestor = ancestor.Parent;
+                if (ancestor is null) return false;
+                ancestor = ancestor.Parent;
+            }
         }
         return true;
     }
@@ -110,12 +119,25 @@ public sealed record StyleRule(string Selector, IReadOnlyDictionary<string, stri
         if (pseudo.Equals("disabled", StringComparison.OrdinalIgnoreCase) && panel.IsEnabled) return false;
         if (pseudo.Equals("checked", StringComparison.OrdinalIgnoreCase) && !panel.IsChecked) return false;
         if (simple == "*") return true;
-        var type = Regex.Match(simple, "^[a-zA-Z][a-zA-Z0-9_-]*").Value;
+        var type = simple.StartsWith('*') ? string.Empty : Regex.Match(simple, "^[a-zA-Z][a-zA-Z0-9_-]*").Value;
         if (!string.IsNullOrEmpty(type) && !type.Equals(panel.TagName, StringComparison.OrdinalIgnoreCase)) return false;
         foreach (Match match in Regex.Matches(simple, "[.#]([a-zA-Z0-9_-]+)"))
         {
             if (match.Value[0] == '.' && !panel.Classes.Contains(match.Groups[1].Value)) return false;
             if (match.Value[0] == '#' && !string.Equals(panel.Id, match.Groups[1].Value, StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        foreach (Match match in Regex.Matches(simple, @"\[([a-zA-Z0-9_-]+)(?:=([^\]]+))?\]"))
+        {
+            var attrName = match.Groups[1].Value;
+            var attrVal = match.Groups[2].Success ? match.Groups[2].Value.Trim('"', '\'') : null;
+            if (attrVal is null)
+            {
+                if (!panel.Attributes.ContainsKey(attrName) && !panel.HasScope(attrName)) return false;
+            }
+            else
+            {
+                if (!panel.Attributes.TryGetValue(attrName, out var v) || !string.Equals(v, attrVal, StringComparison.OrdinalIgnoreCase)) return false;
+            }
         }
         return true;
     }
@@ -126,7 +148,10 @@ public sealed class StyleSheet
     private readonly List<StyleRule> _rules = [];
     public IReadOnlyList<StyleRule> Rules => _rules;
 
-    public static StyleSheet Parse(string css)
+    public void AddRules(IEnumerable<StyleRule> rules) => _rules.AddRange(rules);
+    public void Clear() => _rules.Clear();
+
+    public static StyleSheet Parse(string css, string? scopeId = null)
     {
         var sheet = new StyleSheet();
         var order = 0;
@@ -139,9 +164,66 @@ public sealed class StyleSheet
                 if (split.Length == 2) properties[split[0].Trim()] = split[1].Trim();
             }
             foreach (var selector in match.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                sheet._rules.Add(new StyleRule(selector.Trim(), properties, order++));
+            {
+                var scopedSelector = string.IsNullOrWhiteSpace(scopeId) ? selector.Trim() : ScopeSelector(selector.Trim(), scopeId.Trim());
+                sheet._rules.Add(new StyleRule(scopedSelector, properties, order++));
+            }
         }
         return sheet;
+    }
+
+    public static string ScopeSelector(string selector, string scopeId)
+    {
+        if (string.IsNullOrWhiteSpace(scopeId) || string.IsNullOrWhiteSpace(selector)) return selector;
+        var scopeAttr = $"[{scopeId}]";
+        if (selector.Contains(scopeAttr, StringComparison.OrdinalIgnoreCase)) return selector;
+
+        var deepMatch = Regex.Match(selector, @"::deep|:deep\(([^)]+)\)");
+        if (deepMatch.Success)
+        {
+            var beforeDeep = selector[..deepMatch.Index].TrimEnd();
+            var afterDeep = deepMatch.Groups[1].Success
+                ? deepMatch.Groups[1].Value
+                : selector[(deepMatch.Index + deepMatch.Length)..].TrimStart();
+
+            var scopedBefore = ScopeCompoundSelectors(beforeDeep, scopeAttr);
+            return string.IsNullOrWhiteSpace(afterDeep) ? scopedBefore : $"{scopedBefore} {afterDeep.Trim()}";
+        }
+
+        return ScopeCompoundSelectors(selector, scopeAttr);
+    }
+
+    private static string ScopeCompoundSelectors(string selector, string scopeAttr)
+    {
+        var parts = Regex.Split(selector, @"(?<=[\s>+~])|(?=[\s>+~])");
+        var sb = new System.Text.StringBuilder();
+        foreach (var part in parts)
+        {
+            if (string.IsNullOrWhiteSpace(part) || part == ">" || part == "+" || part == "~")
+            {
+                sb.Append(part);
+                continue;
+            }
+            var trimmed = part.Trim();
+            if (string.IsNullOrEmpty(trimmed) || trimmed.Contains(scopeAttr, StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append(part);
+                continue;
+            }
+
+            var pseudoIdx = trimmed.IndexOf(':');
+            string scopedPart;
+            if (pseudoIdx >= 0)
+            {
+                scopedPart = trimmed[..pseudoIdx] + scopeAttr + trimmed[pseudoIdx..];
+            }
+            else
+            {
+                scopedPart = trimmed + scopeAttr;
+            }
+            sb.Append(scopedPart);
+        }
+        return sb.ToString();
     }
 
     public ComputedStyle Compute(Panel panel)

@@ -14,6 +14,7 @@ public sealed class ParameterAttribute : Attribute { }
 
 public abstract class RazorPanel : PanelComponent
 {
+    public string? ScopeId { get; set; }
     private readonly StringBuilder _output = new();
     private string _attributeSuffix = string.Empty;
     private readonly Dictionary<string, RazorPanel> _childComponents = new(StringComparer.Ordinal);
@@ -194,7 +195,9 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         var generatedType = assembly.GetTypes().FirstOrDefault(t => t.Name.Equals(className, StringComparison.OrdinalIgnoreCase))
             ?? assembly.GetTypes().FirstOrDefault(t => typeof(RazorPanel).IsAssignableFrom(t));
         if (generatedType is null) throw new InvalidOperationException("Razor output did not contain a component type.");
-        return (RazorPanel)Activator.CreateInstance(generatedType)!;
+        var templateInstance = (RazorPanel)Activator.CreateInstance(generatedType)!;
+        if (string.IsNullOrEmpty(templateInstance.ScopeId)) templateInstance.ScopeId = $"b-{className.ToLowerInvariant()}";
+        return templateInstance;
     }
 
     public PanelComponent BuildTree(RazorPanel template)
@@ -313,6 +316,7 @@ internal static class HtmlPanelParser
     public static PanelComponent Parse(string markup, RazorPanel root, IReadOnlyDictionary<string, Func<RazorPanel>>? components = null)
     {
         root.TagName = "root";
+        if (!string.IsNullOrEmpty(root.ScopeId)) root.AddScope(root.ScopeId);
         var preservedInputs = FindInputs(root);
         root.ClearChildren();
         if (string.IsNullOrWhiteSpace(markup)) return root;
@@ -350,7 +354,9 @@ internal static class HtmlPanelParser
     {
         if (node is XText text && !string.IsNullOrWhiteSpace(text.Value))
         {
-            parent.AddChild(new Panel { TagName = "text", Text = text.Value });
+            var textPanel = new Panel { TagName = "text", Text = text.Value };
+            if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
+            parent.AddChild(textPanel);
             return;
         }
         if (node is not XElement element) return;
@@ -365,6 +371,7 @@ internal static class HtmlPanelParser
                 else child.SetParameter(attribute.Name.LocalName, attribute.Value);
             }
             var childTree = new RazorComponentFactory(components).BuildTree(child);
+            if (!string.IsNullOrEmpty(runtime.ScopeId)) childTree.AddScope(runtime.ScopeId);
             parent.AddChild(childTree);
             return;
         }
@@ -377,6 +384,7 @@ internal static class HtmlPanelParser
             _ => new Panel()
         };
         panel.TagName = element.Name.LocalName;
+        if (!string.IsNullOrEmpty(runtime.ScopeId)) panel.AddScope(runtime.ScopeId);
         string? click = null, change = null, bind = null;
         string? declaredValue = null;
         foreach (var attribute in element.Attributes())

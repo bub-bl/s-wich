@@ -1,0 +1,22 @@
+root {
+    width: 300px;
+    height: 40px;
+}
+
+.btn {
+    width: 300px;
+    height: 40px;
+    border: 1px solid #ccc;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.title {
+    color: #333;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+}
