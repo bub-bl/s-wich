@@ -75,8 +75,7 @@ public abstract class RazorPanel : PanelComponent
     }
     internal void SetParameter(string name, string value)
     {
-        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var property = GetType().GetProperty(name, flags);
+        var property = FindParameter(name);
         if (property is not null)
         {
             if (!property.IsDefined(typeof(ParameterAttribute), true))
@@ -92,6 +91,29 @@ public abstract class RazorPanel : PanelComponent
 
     private static object? ConvertParameter(string value, Type type) =>
         type == typeof(string) ? value : Convert.ChangeType(value, Nullable.GetUnderlyingType(type) ?? type);
+
+    private PropertyInfo? FindParameter(string name)
+    {
+        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var exact = GetType().GetProperty(name, flags);
+        if (exact is not null) return exact;
+        // Case-insensitive fallback (route parameters, attribute casing). When
+        // several properties collide ignoring case, prefer the one declared on
+        // the most derived type (e.g. a generated [Parameter] Id over Panel.Id).
+        return GetType().GetProperties(flags | BindingFlags.IgnoreCase)
+            .Where(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.DeclaringType == GetType() ? 0 : 1)
+            .ThenBy(p => p.Name.Equals(name, StringComparison.Ordinal) ? 0 : 1)
+            .FirstOrDefault();
+    }
+    internal Action<string>? NavigationRequested { get; set; }
+
+    protected void NavigateTo(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        NavigationRequested?.Invoke(url);
+    }
+
     // The Razor SDK generates a design-time declaration for .razor files.
     // That declaration contains the component shape but not the generated
     // ExecuteAsync body, so the base must remain instantiable from the IDE's
@@ -124,6 +146,31 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
     }
 
     public RazorPanel CompileTemplate(string razorSource, string className, Type baseType, params Assembly[] references)
+    {
+        var assembly = CompileAssembly(razorSource, className, baseType, references);
+        return CreateTemplate(assembly, className);
+    }
+
+    /// <summary>
+    /// Compiles the component from a file, caching the emitted assembly by
+    /// (path, className, write time) so hot reloads of unchanged files skip the
+    /// Roslyn emit. A fresh template instance is created on every call.
+    /// </summary>
+    public RazorPanel CompileTemplateFromFile(string razorPath, string className, Type baseType, params Assembly[] references)
+    {
+        razorPath = Path.GetFullPath(razorPath);
+        var writeTime = File.GetLastWriteTimeUtc(razorPath).Ticks;
+        var cacheKey = razorPath + "|" + className + "|" + (baseType.FullName ?? baseType.Name);
+        var assembly = TemplateAssemblyCache.Get(cacheKey, writeTime);
+        if (assembly is null)
+        {
+            assembly = CompileAssembly(ReadStableFileText(razorPath), className, baseType, references);
+            TemplateAssemblyCache.Set(cacheKey, writeTime, assembly);
+        }
+        return CreateTemplate(assembly, className);
+    }
+
+    private Assembly CompileAssembly(string razorSource, string className, Type baseType, params Assembly[] references)
     {
         // Event and binding expressions are intentionally converted to stable
         // markers before Razor parses the document. This keeps the generated
@@ -191,13 +238,72 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         if (!result.Success)
             throw new InvalidOperationException("Razor compilation failed:\n" + string.Join('\n', result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
         stream.Position = 0;
-        var assembly = Assembly.Load(stream.ToArray());
+        return Assembly.Load(stream.ToArray());
+    }
+
+    private static RazorPanel CreateTemplate(Assembly assembly, string className)
+    {
         var generatedType = assembly.GetTypes().FirstOrDefault(t => t.Name.Equals(className, StringComparison.OrdinalIgnoreCase))
             ?? assembly.GetTypes().FirstOrDefault(t => typeof(RazorPanel).IsAssignableFrom(t));
         if (generatedType is null) throw new InvalidOperationException("Razor output did not contain a component type.");
         var templateInstance = (RazorPanel)Activator.CreateInstance(generatedType)!;
         if (string.IsNullOrEmpty(templateInstance.ScopeId)) templateInstance.ScopeId = $"b-{className.ToLowerInvariant()}";
         return templateInstance;
+    }
+
+    private static string ReadStableFileText(string path)
+    {
+        string? previous = null;
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(stream);
+                var text = reader.ReadToEnd();
+                if (previous is not null && previous == text) return text;
+                previous = text;
+                Thread.Sleep(30);
+            }
+            catch (IOException) when (attempt < 3)
+            {
+                Thread.Sleep(25);
+            }
+        }
+        return previous ?? File.ReadAllText(path);
+    }
+
+    private static readonly TemplateAssemblyCacheStore TemplateAssemblyCache = new();
+
+    private sealed class TemplateAssemblyCacheStore
+    {
+        private const int MaxEntries = 32;
+        private readonly Dictionary<string, (long WriteTime, Assembly Assembly, long LastUse)> _entries = new(StringComparer.Ordinal);
+        private readonly object _lock = new();
+
+        public Assembly? Get(string key, long writeTime)
+        {
+            lock (_lock)
+            {
+                if (_entries.TryGetValue(key, out var entry) && entry.WriteTime == writeTime)
+                {
+                    _entries[key] = (entry.WriteTime, entry.Assembly, Environment.TickCount64);
+                    return entry.Assembly;
+                }
+            }
+            return null;
+        }
+
+        public void Set(string key, long writeTime, Assembly assembly)
+        {
+            lock (_lock)
+            {
+                _entries[key] = (writeTime, assembly, Environment.TickCount64);
+                if (_entries.Count <= MaxEntries) return;
+                foreach (var stale in _entries.OrderBy(kv => kv.Value.LastUse).Take(_entries.Count - MaxEntries))
+                    _entries.Remove(stale.Key);
+            }
+        }
     }
 
     public PanelComponent BuildTree(RazorPanel template)
@@ -251,8 +357,15 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         return val;
     }
 
-    private static (string Source, string ClassMembers, string? BaseTypeName, IReadOnlyList<string> Interfaces, IReadOnlyList<string> Usings, string? NamespaceName) ExtractDirectives(string source)
+    private const string PageDirectivePattern = @"(?m)^\s*@page\s+""([^""]+)""\s*$";
+
+    /// <summary>Returns the route templates declared by <c>@page</c> directives in a Razor source.</summary>
+    public static string[] ExtractPages(string source) =>
+        Regex.Matches(source, PageDirectivePattern).Select(match => match.Groups[1].Value.Trim()).ToArray();
+
+    private static (string Source, string ClassMembers, string? BaseTypeName, IReadOnlyList<string> Interfaces, IReadOnlyList<string> Usings, string? NamespaceName, IReadOnlyList<string> Pages) ExtractDirectives(string source)
     {
+        var pages = Regex.Matches(source, PageDirectivePattern).Select(match => match.Groups[1].Value.Trim()).ToArray();
         var baseMatch = Regex.Match(source, @"(?m)^\s*@inherits\s+([^\r\n]+)\s*$");
         var interfaces = Regex.Matches(source, @"(?m)^\s*@implements\s+([^\r\n]+)\s*$").Select(match => match.Groups[1].Value.Trim()).ToArray();
         var usings = Regex.Matches(source, @"(?m)^\s*@using\s+([^\r\n;]+);?\s*$").Select(match => match.Groups[1].Value.Trim()).ToArray();
@@ -261,16 +374,17 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         if (baseMatch.Success) removable.Add((baseMatch.Index, baseMatch.Length));
         removable.AddRange(Regex.Matches(source, @"(?m)^\s*@implements\s+([^\r\n]+)\s*$").Select(match => (match.Index, match.Length)));
         removable.AddRange(Regex.Matches(source, @"(?m)^\s*@using\s+([^\r\n;]+);?\s*$").Select(match => (match.Index, match.Length)));
+        removable.AddRange(Regex.Matches(source, PageDirectivePattern).Select(match => (match.Index, match.Length)));
         if (namespaceMatch.Success) removable.Add((namespaceMatch.Index, namespaceMatch.Length));
         foreach (var match in removable.OrderByDescending(match => match.Index)) source = source.Remove(match.Index, match.Length);
         var first = Regex.Match(source, "@code\\s*{", RegexOptions.IgnoreCase);
-        if (!first.Success) return (source, string.Empty, baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null);
+        if (!first.Success) return (source, string.Empty, baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null, pages);
         var second = Regex.Match(source[(first.Index + first.Length)..], "@code\\s*{", RegexOptions.IgnoreCase);
         if (second.Success) throw new InvalidOperationException("A Razor component may contain only one @code block.");
         var open = source.IndexOf('{', first.Index);
         var close = FindClosingBrace(source, open);
         var withoutCode = source.Remove(first.Index, close - first.Index + 1);
-        return (withoutCode, source.Substring(open + 1, close - open - 1), baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null);
+        return (withoutCode, source.Substring(open + 1, close - open - 1), baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null, pages);
     }
 
     private static int FindClosingBrace(string source, int open)
@@ -364,6 +478,7 @@ internal static class HtmlPanelParser
         {
             var child = runtime.GetOrCreateChild(key, componentFactory);
             child.StateChanged = runtime.StateHasChanged;
+            child.NavigationRequested = runtime.NavigationRequested;
             foreach (var attribute in element.Attributes())
             {
                 if (attribute.Name.LocalName.Equals("class", StringComparison.OrdinalIgnoreCase))

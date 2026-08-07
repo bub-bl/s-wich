@@ -4,6 +4,8 @@ public sealed partial class UiSystem
 {
     private string? _razorPath;
     private string? _stylePath;
+    private string? _watchDirectory;
+    private Dictionary<string, DateTime>? _watchSnapshot;
     private string _razorClassName = "Root";
     private volatile bool _reloadRequested;
     private DateTime _reloadNotBeforeUtc;
@@ -40,6 +42,15 @@ public sealed partial class UiSystem
         _lastStyleWriteUtc = _stylePath is null ? DateTime.MinValue : GetWriteTime(_stylePath);
     }
 
+    /// <summary>Watches every .razor / .razor.css file under <paramref name="directory"/>.
+    /// On change the components are re-registered and the current page is reloaded.</summary>
+    public void WatchDirectory(string directory)
+    {
+        StopWatching();
+        _watchDirectory = Path.GetFullPath(directory);
+        _watchSnapshot = TakeDirectorySnapshot(_watchDirectory);
+    }
+
     public void Update(float deltaTime = 1f / 60f)
     {
         DetectFileChanges();
@@ -54,7 +65,15 @@ public sealed partial class UiSystem
         if (!_reloadRequested || DateTime.UtcNow < _reloadNotBeforeUtc) return;
         try
         {
-            if (_razorPath is not null && File.Exists(_razorPath))
+            if (_watchDirectory is not null)
+            {
+                RegisterRazorComponentsFromDirectory(_watchDirectory);
+                if (_currentRoute is not null && _pages.Contains(_currentRoute)) Navigate(CurrentUrl);
+                else if (_currentRoute is not null) { _currentRoute = null; ShowNotFound(CurrentUrl); }
+                else if (_razorRoot is not null) _razorRenderPending = true;
+                else if (_pages.Count > 0) Navigate(CurrentUrl);
+            }
+            else if (_razorPath is not null && File.Exists(_razorPath))
             {
                 LoadRazorFromFile(_razorPath, _razorClassName);
             }
@@ -91,6 +110,16 @@ public sealed partial class UiSystem
 
     private void DetectFileChanges()
     {
+        if (_watchDirectory is not null)
+        {
+            var snapshot = TakeDirectorySnapshot(_watchDirectory);
+            if (_watchSnapshot is null || !SnapshotEqual(_watchSnapshot, snapshot))
+            {
+                _watchSnapshot = snapshot;
+                RequestReload(_watchDirectory);
+            }
+            return;
+        }
         if (_razorPath is not null)
         {
             var writeTime = GetWriteTime(_razorPath);
@@ -155,5 +184,28 @@ public sealed partial class UiSystem
         return previous ?? File.ReadAllText(path);
     }
 
-    public void StopWatching() { }
+    public void StopWatching()
+    {
+        _razorPath = null;
+        _stylePath = null;
+        _watchDirectory = null;
+        _watchSnapshot = null;
+    }
+
+    private static Dictionary<string, DateTime> TakeDirectorySnapshot(string directory)
+    {
+        var snapshot = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        if (!Directory.Exists(directory)) return snapshot;
+        foreach (var path in Directory.EnumerateFiles(directory, "*.razor*", SearchOption.AllDirectories))
+            snapshot[Path.GetFullPath(path)] = GetWriteTime(path);
+        return snapshot;
+    }
+
+    private static bool SnapshotEqual(Dictionary<string, DateTime> a, Dictionary<string, DateTime> b)
+    {
+        if (a.Count != b.Count) return false;
+        foreach (var (key, writeTime) in a)
+            if (!b.TryGetValue(key, out var other) || other != writeTime) return false;
+        return true;
+    }
 }

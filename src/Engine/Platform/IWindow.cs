@@ -3,6 +3,7 @@ namespace Crowbar.Engine.Platform;
 public interface IWindow : IDisposable
 {
     string Title { get; }
+    void SetTitle(string title);
     int Width { get; }
     int Height { get; }
     int FramebufferWidth { get; }

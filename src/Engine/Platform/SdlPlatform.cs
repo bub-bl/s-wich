@@ -41,7 +41,7 @@ public sealed class SdlPlatform : IPlatform
 
         public SilkWindow(WindowOptions options)
         {
-            Title = options.Title;
+            _title = options.Title;
             SilkWindowOptions windowOptions = SilkWindowOptions.Default;
             windowOptions.Title = options.Title;
             windowOptions.Size = new Silk.NET.Maths.Vector2D<int>(options.Width, options.Height);
@@ -64,7 +64,13 @@ public sealed class SdlPlatform : IPlatform
             _window.FramebufferResize += size => Resized?.Invoke(size.X, size.Y);
         }
 
-        public string Title { get; }
+        private string _title;
+        public string Title => _title;
+        public void SetTitle(string title)
+        {
+            _title = title;
+            _window.Title = title;
+        }
         public int Width => _window.Size.X;
         public int Height => _window.Size.Y;
         public int FramebufferWidth => _window.FramebufferSize.X;

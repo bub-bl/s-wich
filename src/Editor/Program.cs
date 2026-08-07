@@ -22,15 +22,15 @@ internal static class Program
 
         WebGpuContext? webGpu = null;
         using var ui = new UiSystem();
-        // Enregistrement automatique des composants Razor réutilisables
-        var componentsDir = ResolveUiDirectory("Components");
-        var componentCount = ui.RegisterRazorComponentsFromDirectory(componentsDir);
-        Console.WriteLine($"Razor components: registered {componentCount} component(s) from {componentsDir}");
-        
-        var razorPath = ResolveUiFile("Demo.razor");
-        Console.WriteLine($"Razor UI source: {razorPath}");
-        ui.LoadRazorFromFile(razorPath, "Demo");
-        ui.WatchFiles(razorPath, className: "Demo");
+        // Enregistrement automatique de tout le dossier Ui/ : les fichiers avec
+        // @page deviennent des pages routables, les autres des composants.
+        var uiDirectory = ResolveUiDirectory("");
+        var registeredCount = ui.RegisterRazorComponentsFromDirectory(uiDirectory);
+        Console.WriteLine($"Razor UI: registered {registeredCount} file(s) from {uiDirectory}");
+        ui.NavigationChanged += url => window.SetTitle($"Crowbar — {url}");
+        ui.Navigate("/");
+        Console.WriteLine($"Razor UI: current page is {ui.CurrentUrl}");
+        ui.WatchDirectory(uiDirectory);
         window.PointerMoved += e => ui.ProcessPointerMove(e.X, e.Y);
         window.PointerButtonChanged += e =>
         {
@@ -59,8 +59,6 @@ internal static class Program
         };
         window.Run();
     }
-
-    private static string ResolveUiFile(string fileName) => ResolveUiPath(Path.Combine("Ui", fileName), File.Exists);
 
     private static string ResolveUiDirectory(string directory) => ResolveUiPath(Path.Combine("Ui", directory), Directory.Exists);
 

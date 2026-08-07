@@ -106,6 +106,7 @@ public static class UiSmokeTests
         TestRazorDirectivesAndLifecycle();
         TestScopedRazorCss();
         TestAutoRegisteredComponents();
+        TestRazorRouting();
     }
 
     private static void TestAutoRegisteredComponents()
@@ -132,6 +133,71 @@ public static class UiSmokeTests
             var label = Find(ui.Screen, p => p.Text == "auto resolved");
             if (label is null)
                 throw new InvalidOperationException("Auto-registered component was not resolved from markup.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static void TestRazorRouting()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "CrowbarRazorPages_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "Home.razor"), "@page \"/\"\n@page \"/home\"\n<div class=\"home-page\"><span>Home</span></div>\n");
+            File.WriteAllText(Path.Combine(directory, "Item.razor"), "@page \"/items/{id:int}\"\n<div><span>Item @Id</span></div>\n@code {\n    [Crowbar.Engine.UI.Parameter] public int Id { get; set; }\n}\n");
+            File.WriteAllText(Path.Combine(directory, "Nav.razor"), "@page \"/nav\"\n<div><button @onclick=\"GoHome\">Back</button></div>\n@code {\n    private void GoHome() { NavigateTo(\"/home\"); }\n}\n");
+            using var ui = new UiSystem();
+            ui.RegisterRazorComponentsFromDirectory(directory);
+            if (ui.Pages.Count != 4)
+                throw new InvalidOperationException($"Routing registered {ui.Pages.Count} route(s) instead of 4.");
+            ui.Screen.SetViewport(640, 240);
+            ui.Renderer.Resize(640, 240);
+
+            ui.Navigate("/");
+            ui.Render();
+            if (ui.CurrentUrl != "/" || Find(ui.Screen, p => p.Text == "Home") is null)
+                throw new InvalidOperationException("Razor routing default route / did not resolve the home page.");
+
+            ui.Navigate("/home");
+            ui.Render();
+            if (Find(ui.Screen, p => p.Text == "Home") is null)
+                throw new InvalidOperationException("Razor routing alias /home did not resolve the home page.");
+
+            ui.Navigate("/items/42");
+            ui.Render();
+            if (Find(ui.Screen, p => p.Text == "Item 42") is null)
+                throw new InvalidOperationException("Razor routing did not convert the {id} route parameter to the typed page parameter.");
+
+            ui.Navigate("/items/abc");
+            ui.Render();
+            if (Find(ui.Screen, p => p.Text.Contains("404")) is null)
+                throw new InvalidOperationException("Razor routing did not reject a route parameter failing the {id:int} constraint.");
+
+            ui.Navigate("/missing");
+            ui.Render();
+            if (ui.CurrentUrl != "/missing" || Find(ui.Screen, p => p.Text.Contains("404")) is null)
+                throw new InvalidOperationException("Razor routing did not render the 404 fallback for an unknown URL.");
+
+            ui.Navigate("/nav");
+            ui.Render();
+            var button = Find(ui.Screen, p => p is Button);
+            if (button is null) throw new InvalidOperationException("Razor routing page button was not found.");
+            ui.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+            ui.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+            ui.Update();
+            ui.Render();
+            if (ui.CurrentUrl != "/home" || Find(ui.Screen, p => p.Text == "Home") is null)
+                throw new InvalidOperationException("NavigateTo from a page did not navigate to /home.");
+
+            using (var single = new UiSystem())
+            {
+                single.RegisterRazorComponentFromFile("Solo", Path.Combine(directory, "Home.razor"), "Solo");
+                if (single.Pages.Count != 2)
+                    throw new InvalidOperationException($"Single-file registration registered {single.Pages.Count} route(s) instead of 2.");
+            }
         }
         finally
         {
