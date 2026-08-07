@@ -109,6 +109,8 @@ public static class UiSmokeTests
         TestRazorRouting();
         TestChildContent();
         TestChildContentTransitions();
+        TestMultipleFragments();
+        TestMixedFragments();
     }
 
     private static void TestAutoRegisteredComponents()
@@ -409,6 +411,161 @@ root { width: 99px; height: 99px; }
         ui.Render();
         if (Find(ui.Screen, p => p.Text == "Card title") is null)
             throw new InvalidOperationException("ChildContent was not restored after being re-added.");
+    }
+
+    private static void TestMultipleFragments()
+    {
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("Window", @"
+<div class=""window"">
+    @if (Header is not null)
+    {
+        <div class=""window-header"">@Header</div>
+    }
+
+    <div class=""window-body"">@Body</div>
+
+    @if (Footer is not null)
+    {
+        <div class=""window-footer"">@Footer</div>
+    }
+</div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? Header { get; set; }
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? Body { get; set; }
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? Footer { get; set; }
+}
+", "Window");
+        ui.LoadRazor(@"
+<div class=""root"">
+    <button @onclick=""ToggleHeader"">Toggle</button>
+    <Window>
+        @if (showHeader)
+        {
+            <Header><span class=""win-title"">Title @name</span></Header>
+        }
+
+        <Body>
+            <span>Body content</span>
+            <input value=""@name"" @bind-value=""name"" />
+        </Body>
+
+        <Footer><span class=""win-foot"">Footer @name</span></Footer>
+    </Window>
+</div>
+@code {
+    private string name = ""first"";
+    private bool showHeader = true;
+    private void ToggleHeader() { showHeader = !showHeader; StateHasChanged(); }
+}
+", "MultiFragmentDemo");
+        ui.Screen.SetViewport(640, 480);
+        ui.Renderer.Resize(640, 480);
+        ui.Render();
+
+        // All three named fragments render, in declaration order.
+        if (Find(ui.Screen, p => p.Text == "Title first") is null)
+            throw new InvalidOperationException("Header fragment did not render.");
+        if (Find(ui.Screen, p => p.Text == "Body content") is null)
+            throw new InvalidOperationException("Body fragment did not render.");
+        if (Find(ui.Screen, p => p.Text == "Footer first") is null)
+            throw new InvalidOperationException("Footer fragment did not render.");
+        var texts = CollectTexts(ui.Screen);
+        if (texts.IndexOf("Title first") >= texts.IndexOf("Body content") ||
+            texts.IndexOf("Body content") >= texts.IndexOf("Footer first"))
+            throw new InvalidOperationException("Named fragments rendered out of order.");
+
+        // A bind inside a fragment updates the parent; the parent rerender
+        // refreshes every fragment that reads the parent state.
+        var textInput = Find(ui.Screen, p => p is TextInput) as TextInput;
+        if (textInput is null) throw new InvalidOperationException("Fragment input was not created.");
+        textInput.SetValue("second");
+        ui.Update();
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Title second") is null || Find(ui.Screen, p => p.Text == "Footer second") is null)
+            throw new InvalidOperationException("Parent rerender did not refresh all named fragments.");
+
+        // Removing a LEADING region shifts the sibling indices (body/footer
+        // move up); the input's preserved-state key misses but its value is
+        // restored from the value="@name" attribute, and the removed region's
+        // content must disappear.
+        var button = Find(ui.Screen, p => p is Button);
+        if (button is null) throw new InvalidOperationException("Toggle button was not found.");
+        ui.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.Update();
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Title second") is not null)
+            throw new InvalidOperationException("Header fragment was not removed when its region vanished.");
+        var shiftedInput = Find(ui.Screen, p => p is TextInput) as TextInput;
+        if (shiftedInput is null || shiftedInput.Value != "second")
+            throw new InvalidOperationException("Input value was lost when a leading region disappeared.");
+        if (Find(ui.Screen, p => p.Text == "Body content") is null || Find(ui.Screen, p => p.Text == "Footer second") is null)
+            throw new InvalidOperationException("Sibling fragments were lost when a leading region disappeared.");
+
+        // Re-adding the region restores it.
+        button = Find(ui.Screen, p => p is Button);
+        if (button is null) throw new InvalidOperationException("Toggle button was lost after the removal.");
+        ui.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.Update();
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Title second") is null)
+            throw new InvalidOperationException("Header fragment was not restored when its region came back.");
+    }
+
+    private static void TestMixedFragments()
+    {
+        // A component using both the default ChildContent and named fragments,
+        // with the parent providing the regions in a different order than the
+        // component renders them: each fragment must be spliced at its own
+        // marker, so the rendered order follows the component, not the parent.
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("Layout", @"
+<div class=""layout"">
+    <div class=""layout-head"">@Title</div>
+    <div class=""layout-body"">@ChildContent</div>
+    <div class=""layout-foot"">@Footer</div>
+</div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? Title { get; set; }
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? ChildContent { get; set; }
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? Footer { get; set; }
+}
+", "Layout");
+        ui.LoadRazor(@"
+<div class=""root"">
+    <Layout>
+        <Footer><span class=""lf"">Tail</span></Footer>
+        <span class=""cc"">Middle</span>
+        <Title><span class=""lt"">Head</span></Title>
+    </Layout>
+</div>
+", "MixedFragmentsDemo");
+        ui.Screen.SetViewport(640, 480);
+        ui.Renderer.Resize(640, 480);
+        ui.Render();
+
+        if (Find(ui.Screen, p => p.Text == "Head") is null || Find(ui.Screen, p => p.Text == "Middle") is null ||
+            Find(ui.Screen, p => p.Text == "Tail") is null)
+            throw new InvalidOperationException("Mixed ChildContent + named fragments did not all render.");
+        var texts = CollectTexts(ui.Screen);
+        if (texts.IndexOf("Head") >= texts.IndexOf("Middle") || texts.IndexOf("Middle") >= texts.IndexOf("Tail"))
+            throw new InvalidOperationException("Fragments spliced in the parent's order instead of the component's order.");
+    }
+
+    private static List<string> CollectTexts(Panel panel)
+    {
+        var result = new List<string>();
+        if (!string.IsNullOrEmpty(panel.Text)) result.Add(panel.Text);
+        foreach (var child in panel.Children) result.AddRange(CollectTexts(child));
+        return result;
     }
 
     private static Panel? Find(Panel panel, Func<Panel, bool> predicate)

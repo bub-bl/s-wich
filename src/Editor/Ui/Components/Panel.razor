@@ -1,0 +1,28 @@
+@inherits Crowbar.Engine.UI.RazorPanel
+@namespace Crowbar.Editor.Ui.Components
+@using Microsoft.AspNetCore.Components
+
+<div class="panel">
+    @if (Header is not null)
+    {
+        <div class="panel-header">@Header</div>
+    }
+
+    <div class="panel-body">@Body</div>
+
+    @if (Footer is not null)
+    {
+        <div class="panel-footer">@Footer</div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? Header { get; set; }
+
+    [Parameter]
+    public RenderFragment? Body { get; set; }
+
+    [Parameter]
+    public RenderFragment? Footer { get; set; }
+}

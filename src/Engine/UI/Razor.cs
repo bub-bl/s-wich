@@ -26,28 +26,62 @@ public abstract class RazorPanel : PanelComponent, IComponent
 
     /// <summary>
     /// Placeholder emitted by <see cref="Write"/> when a component renders its
-    /// <c>@ChildContent</c> fragment. The native parser replaces it with the
-    /// panels captured from the markup between the component's tags.
+    /// default <c>@ChildContent</c> fragment. The native parser replaces it
+    /// with the panels captured from the markup between the component's tags.
     /// </summary>
     internal const string ChildContentMarker = "[[__CROWBAR_CHILDCONTENT__]]";
 
-    /// <summary>Panels captured from the markup between this component's tags, if any.</summary>
-    internal IReadOnlyList<Panel>? ChildContentPanels { get; private set; }
+    private const string NamedFragmentMarkerPrefix = "[[__CROWBAR_FRAGMENT__:";
+
+    /// <summary>Returns the marker text emitted for a <see cref="RenderFragment"/> parameter.</summary>
+    internal static string FragmentMarker(string name) => name.Equals("ChildContent", StringComparison.OrdinalIgnoreCase)
+        ? ChildContentMarker
+        : NamedFragmentMarkerPrefix + name + "]]";
 
     /// <summary>
-    /// Serialized form of the last captured child content (evaluated markup).
-    /// When it is unchanged across parent renders the component keeps its tree;
-    /// the version below only advances on real content changes so unchanged
-    /// components keep benefiting from the <see cref="BuildHash"/> skip.
+    /// Panels captured from the markup provided for the component's
+    /// <see cref="RenderFragment"/> parameters (named regions like <c>Header</c>
+    /// or the default <c>ChildContent</c>), keyed by parameter name.
+    /// <see langword="null"/> panels mean the fragment is provided but empty.
     /// </summary>
-    internal string? ChildContentSignature { get; private set; }
+    private readonly Dictionary<string, (IReadOnlyList<Panel>? Panels, string Signature)> _fragments =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    private int _childContentVersion;
-    private int _builtChildContentVersion = -1;
+    /// <summary>Maps each live sentinel fragment instance to the parameter it stands for.</summary>
+    private readonly Dictionary<RenderFragment, string> _fragmentNames = new();
 
-    internal bool NeedsContentRebuild() => _childContentVersion != _builtChildContentVersion;
+    private int _fragmentVersion;
+    private int _builtFragmentVersion = -1;
 
-    internal void MarkChildContentBuilt() => _builtChildContentVersion = _childContentVersion;
+    // These two cover every fragment (ChildContent and named regions alike);
+    // the names are kept for compatibility with earlier single-fragment builds.
+    internal bool NeedsContentRebuild() => _fragmentVersion != _builtFragmentVersion;
+
+    internal void MarkChildContentBuilt() => _builtFragmentVersion = _fragmentVersion;
+
+    internal string? GetFragmentSignature(string name) =>
+        _fragments.TryGetValue(name, out var fragment) ? fragment.Signature : null;
+
+    internal IReadOnlyList<Panel>? GetFragmentPanels(string name) =>
+        _fragments.TryGetValue(name, out var fragment) ? fragment.Panels : null;
+
+    /// <summary>Names of the fragments currently provided to this component (snapshot).</summary>
+    internal string[] ProvidedFragmentNames => [.. _fragments.Keys];
+
+    /// <summary>
+    /// True when <paramref name="elementName"/> can be a named child content
+    /// region: a writable <c>[Parameter]</c> property of type
+    /// <see cref="RenderFragment"/> on this component. Matching follows the
+    /// engine's usual case-insensitive parameter resolution, so an element like
+    /// <c>&lt;header&gt;</c> is consumed as a <c>Header</c> region when the
+    /// component exposes such a fragment parameter.
+    /// </summary>
+    internal bool HasRenderFragmentParameter(string elementName)
+    {
+        var property = FindParameter(elementName);
+        return property is not null && IsRazorParameter(property) && property.CanWrite &&
+               typeof(RenderFragment).IsAssignableFrom(property.PropertyType);
+    }
 
     private readonly StringBuilder _output = new();
     private string _attributeSuffix = string.Empty;
@@ -59,56 +93,84 @@ public abstract class RazorPanel : PanelComponent, IComponent
 
     protected void Write(object? value)
     {
-        // @ChildContent compiles to Write(ChildContent). The fragment content is
-        // captured as panels by the parent's parser; emitting a placeholder here
-        // lets the parser splice them into the child's tree at the right spot.
-        if (value is RenderFragment)
+        // @ChildContent / @Header / ... compile to Write(fragment). The fragment
+        // content is captured as panels by the parent's parser; emitting a named
+        // placeholder here lets the parser splice them into the child's tree at
+        // the right spot. The sentinel instances registered by SetFragment are
+        // how Write knows which parameter it is rendering.
+        if (value is RenderFragment fragment)
         {
-            _output.Append(ChildContentMarker);
+            if (_fragmentNames.TryGetValue(fragment, out var name))
+            {
+                _output.Append(FragmentMarker(name));
+            }
+            else if (_fragments.TryGetValue("ChildContent", out var childContent) &&
+                     childContent.Panels is not null)
+            {
+                // Unregistered inline fragment with real ChildContent to splice:
+                // keep the legacy fallback so the content still lands somewhere.
+                _output.Append(ChildContentMarker);
+            }
+
             return;
         }
 
         _output.Append(System.Net.WebUtility.HtmlEncode(value?.ToString() ?? string.Empty));
     }
 
-    private static readonly RenderFragment EmptyRenderFragment = _ => { };
-
     /// <summary>
-    /// Captures the panels built from the markup between the component's tags and
-    /// binds them to the <c>[Parameter] ChildContent</c> property (typed
-    /// <see cref="RenderFragment"/>) when one exists. A <see langword="null"/>
-    /// (or empty) list clears a previously captured fragment.
+    /// Captures the panels built from the markup provided for a fragment
+    /// parameter (the default <c>ChildContent</c> or a named region like
+    /// <c>Header</c>) and binds them to the matching writable <c>[Parameter]</c>
+    /// property of type <see cref="RenderFragment"/>. A <see langword="null"/>
+    /// (or empty) panel list clears a previously captured fragment so
+    /// conditional regions disappear on re-render.
     /// </summary>
-    internal void SetChildContent(IReadOnlyList<Panel>? panels, string signature)
+    internal void SetFragment(string name, IReadOnlyList<Panel>? panels, string signature)
     {
-        _childContentVersion++;
-        ChildContentPanels = panels;
-        ChildContentSignature = signature;
-        var property = FindParameter("ChildContent");
+        _fragmentVersion++;
+        _fragments[name] = (panels, signature);
+        RemoveFragmentRegistration(name);
+        var property = FindParameter(name);
         if (property is not null && !typeof(RenderFragment).IsAssignableFrom(property.PropertyType))
             property = null; // Not a fragment parameter; nothing to bind or reset.
         if (panels is not { Count: > 0 })
         {
-            // No (or no longer any) content between the tags: reset the parameter
-            // so @ChildContent renders nothing and no stale fragment is spliced.
+            // No (or no longer any) content for this fragment: reset the
+            // parameter so @Fragment renders nothing and no stale panels are
+            // spliced.
             if (property is not null && IsRazorParameter(property) && property.CanWrite)
-            {
                 property.SetValue(this, null);
-            }
-
             return;
         }
 
         if (property is null)
             throw new InvalidOperationException(
-                $"{GetType().Name} does not expose a [Parameter] ChildContent property of type RenderFragment, " +
-                "but markup was provided between its tags.");
+                $"{GetType().Name} does not expose a [Parameter] {name} property of type RenderFragment, " +
+                "but markup was provided for it.");
         if (!IsRazorParameter(property))
             throw new InvalidOperationException(
-                $"Razor property 'ChildContent' on {GetType().Name} is not marked with [Parameter].");
+                $"Razor property '{name}' on {GetType().Name} is not marked with [Parameter].");
         if (!property.CanWrite)
-            throw new InvalidOperationException($"Razor parameter 'ChildContent' on {GetType().Name} is read-only.");
-        property.SetValue(this, EmptyRenderFragment);
+            throw new InvalidOperationException($"Razor parameter '{name}' on {GetType().Name} is read-only.");
+        var sentinel = CreateFragmentSentinel();
+        _fragmentNames[sentinel] = name;
+        property.SetValue(this, sentinel);
+    }
+
+    private void RemoveFragmentRegistration(string name)
+    {
+        foreach (var key in _fragmentNames.Where(kv => kv.Value.Equals(name, StringComparison.OrdinalIgnoreCase))
+                     .Select(kv => kv.Key).ToArray())
+            _fragmentNames.Remove(key);
+    }
+
+    private static RenderFragment CreateFragmentSentinel()
+    {
+        // Each sentinel captures a unique token so delegate equality can never
+        // conflate two fragments rendered by the same component.
+        var token = Guid.NewGuid();
+        return builder => { _ = token; };
     }
 
     // Helpers emitted by Razor for attributes containing C# expressions,
@@ -698,8 +760,7 @@ internal static class HtmlPanelParser
     {
         if (node is XText text)
         {
-            if (runtime.ChildContentPanels is not null &&
-                text.Value.Contains(RazorPanel.ChildContentMarker, StringComparison.Ordinal))
+            if (FragmentMarkerRegex.IsMatch(text.Value))
             {
                 SpliceChildContent(parent, text.Value, runtime, key, preservedInputs);
                 return;
@@ -734,28 +795,51 @@ internal static class HtmlPanelParser
             // Capture the markup between the component's tags. It is parsed with
             // the parent as runtime: expressions were already evaluated by the
             // parent's ExecuteAsync and event/binding attributes refer to parent
-            // members. The panels are handed to the child so its @ChildContent
-            // placeholder (a marker text node) can be replaced by them.
+            // members. Named region elements (<Header>, <Body>, ...) matching a
+            // RenderFragment parameter of the component feed that fragment;
+            // everything else feeds the default ChildContent fragment. The
+            // panels are handed to the child so its @Fragment placeholder (a
+            // marker text node) can be replaced by them.
+            var providedFragments = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var regionNodes = new Dictionary<string, List<XNode>>(StringComparer.OrdinalIgnoreCase);
             var childContentNodes = new List<XNode>();
             foreach (var childNode in element.Nodes())
-                if (childNode is not XText whitespace || !string.IsNullOrWhiteSpace(whitespace.Value))
-                    childContentNodes.Add(childNode);
-            var contentSignature = string.Concat(childContentNodes.Select(node => node.ToString()));
-            if (contentSignature != child.ChildContentSignature)
             {
-                List<Panel>? fragment = null;
-                if (childContentNodes.Count > 0)
+                if (childNode is XText whitespace && string.IsNullOrWhiteSpace(whitespace.Value)) continue;
+                if (childNode is XElement regionElement &&
+                    child.HasRenderFragmentParameter(regionElement.Name.LocalName))
                 {
-                    var container = new Panel();
-                    var emptyPreserved = new Dictionary<string, TextInput>(StringComparer.Ordinal);
-                    for (var contentIndex = 0; contentIndex < childContentNodes.Count; contentIndex++)
-                        AddNode(container, childContentNodes[contentIndex], runtime, components,
-                            $"{key}/content/{contentIndex}", emptyPreserved);
-                    fragment = [.. container.Children];
+                    var regionName = regionElement.Name.LocalName;
+                    if (!regionNodes.TryGetValue(regionName, out var region))
+                        regionNodes[regionName] = region = [];
+                    foreach (var inner in regionElement.Nodes())
+                        if (inner is not XText whitespaceOnly || !string.IsNullOrWhiteSpace(whitespaceOnly.Value))
+                            region.Add(inner);
+                    continue;
                 }
 
-                child.SetChildContent(fragment, contentSignature);
+                childContentNodes.Add(childNode);
             }
+
+            foreach (var (regionName, nodes) in regionNodes)
+            {
+                providedFragments.Add(regionName);
+                var signature = string.Concat(nodes.Select(node => node.ToString()));
+                if (signature != child.GetFragmentSignature(regionName))
+                    child.SetFragment(regionName, BuildFragmentPanels(nodes, key, regionName, runtime, components),
+                        signature);
+            }
+
+            providedFragments.Add("ChildContent");
+            var contentSignature = string.Concat(childContentNodes.Select(node => node.ToString()));
+            if (contentSignature != child.GetFragmentSignature("ChildContent"))
+                child.SetFragment("ChildContent", BuildFragmentPanels(childContentNodes, key, "ChildContent", runtime,
+                    components), contentSignature);
+
+            // Fragments the parent no longer provides (e.g. a region removed by
+            // an @if) must be cleared so the child re-renders without them.
+            foreach (var staleName in child.ProvidedFragmentNames.Where(name => !providedFragments.Contains(name)))
+                child.SetFragment(staleName, null, string.Empty);
 
             var childTree = new RazorComponentFactory(components).BuildTree(child);
             // The child tree keeps only its own scope. Applying the parent's scope
@@ -830,45 +914,70 @@ internal static class HtmlPanelParser
     }
 
     /// <summary>
-    /// Replaces the ChildContent marker text node with the captured fragment
-    /// panels, preserving any surrounding text and restoring input state with
-    /// keys relative to the current tree (fragment inputs were built fresh by
-    /// the parent's capture pass, so they are restored here instead).
+    /// Matches any fragment marker in a rendered text node (default ChildContent
+    /// or a named region). The name is captured up to the closing brackets so
+    /// non-ASCII identifiers (e.g. <c>Tête</c>) parse correctly; the marker is
+    /// self-delimiting so there is no ambiguity.
+    /// </summary>
+    private static readonly Regex FragmentMarkerRegex = new(
+        @"\[\[__CROWBAR_(?:CHILDCONTENT__|FRAGMENT__:([^\]\[]+))\]\]",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Replaces fragment marker text nodes with the captured fragment panels,
+    /// preserving any surrounding text and restoring input state with keys
+    /// relative to the current tree (fragment inputs were built fresh by the
+    /// parent's capture pass, so they are restored here instead).
     /// </summary>
     private static void SpliceChildContent(Panel parent, string content, RazorPanel runtime, string key,
         IReadOnlyDictionary<string, TextInput> preservedInputs)
     {
-        var markerIndex = content.IndexOf(RazorPanel.ChildContentMarker, StringComparison.Ordinal);
-        var prefix = content[..markerIndex];
-        var suffix = content[(markerIndex + RazorPanel.ChildContentMarker.Length)..];
         var lastSlash = key.LastIndexOf('/');
         var parentKey = lastSlash > 0 ? key[..lastSlash] : key;
         var baseIndex = lastSlash > 0 && int.TryParse(key[(lastSlash + 1)..], out var parsed) ? parsed : 0;
         var insertIndex = baseIndex;
-        if (!string.IsNullOrWhiteSpace(prefix))
+        var position = 0;
+        foreach (Match match in FragmentMarkerRegex.Matches(content))
         {
-            var textPanel = new Panel { TagName = "text", Text = prefix };
-            if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
-            parent.AddChild(textPanel);
-            insertIndex++;
-        }
-
-        if (runtime.ChildContentPanels is not null)
-        {
-            foreach (var panel in runtime.ChildContentPanels)
+            if (match.Index > position)
+                AddSpliceText(parent, content[position..match.Index], runtime, ref insertIndex);
+            var fragmentName = match.Groups[1].Success ? match.Groups[1].Value : "ChildContent";
+            var panels = runtime.GetFragmentPanels(fragmentName);
+            if (panels is not null)
             {
-                RestorePreservedInputs(panel, $"{parentKey}/{insertIndex}", preservedInputs);
-                parent.AddChild(panel);
-                insertIndex++;
+                foreach (var panel in panels)
+                {
+                    RestorePreservedInputs(panel, $"{parentKey}/{insertIndex}", preservedInputs);
+                    parent.AddChild(panel);
+                    insertIndex++;
+                }
             }
+
+            position = match.Index + match.Length;
         }
 
-        if (!string.IsNullOrWhiteSpace(suffix))
-        {
-            var textPanel = new Panel { TagName = "text", Text = suffix };
-            if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
-            parent.AddChild(textPanel);
-        }
+        if (position < content.Length)
+            AddSpliceText(parent, content[position..], runtime, ref insertIndex);
+    }
+
+    private static void AddSpliceText(Panel parent, string text, RazorPanel runtime, ref int insertIndex)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        var textPanel = new Panel { TagName = "text", Text = text };
+        if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
+        parent.AddChild(textPanel);
+        insertIndex++;
+    }
+
+    private static List<Panel>? BuildFragmentPanels(List<XNode> nodes, string key, string name, RazorPanel runtime,
+        IReadOnlyDictionary<string, Func<RazorPanel>>? components)
+    {
+        if (nodes.Count == 0) return null;
+        var container = new Panel();
+        var emptyPreserved = new Dictionary<string, TextInput>(StringComparer.Ordinal);
+        for (var i = 0; i < nodes.Count; i++)
+            AddNode(container, nodes[i], runtime, components, $"{key}/fragment/{name}/{i}", emptyPreserved);
+        return [.. container.Children];
     }
 
     private static void RestorePreservedInputs(Panel panel, string key,

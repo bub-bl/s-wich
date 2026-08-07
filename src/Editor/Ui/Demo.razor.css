@@ -5,7 +5,7 @@ root {
 
 .card {
     width: 520px;
-    height: 270px;
+    height: 620px;
     margin: 32px;
     padding: 18px;
     background-color: #18253aff;
@@ -98,4 +98,22 @@ root {
     height: 22px;
     color: #71829bff;
     font-size: 12px;
+}
+
+.panel-heading {
+    width: 456px;
+    height: 20px;
+    color: #ffffffff;
+    font-size: 12px;
+}
+
+.panel-line {
+    width: 456px;
+    height: 20px;
+    color: #9cc8ffff;
+    font-size: 12px;
+}
+
+.panel-foot {
+    color: #7ee0a5ff;
 }
