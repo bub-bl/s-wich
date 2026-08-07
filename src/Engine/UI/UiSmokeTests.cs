@@ -118,7 +118,7 @@ public static class UiSmokeTests
             File.WriteAllText(Path.Combine(directory, "AutoLabel.razor"), @"
 <div class=""auto-box""><span>@Label</span></div>
 @code {
-    [Crowbar.Engine.UI.Parameter] public string Label { get; set; } = string.Empty;
+    [Microsoft.AspNetCore.Components.Parameter] public string Label { get; set; } = string.Empty;
 }
 ");
             File.WriteAllText(Path.Combine(directory, "_Imports.razor"), "@inherits Crowbar.Engine.UI.RazorPanel");
@@ -147,7 +147,7 @@ public static class UiSmokeTests
         try
         {
             File.WriteAllText(Path.Combine(directory, "Home.razor"), "@page \"/\"\n@page \"/home\"\n<div class=\"home-page\"><span>Home</span></div>\n");
-            File.WriteAllText(Path.Combine(directory, "Item.razor"), "@page \"/items/{id:int}\"\n<div><span>Item @Id</span></div>\n@code {\n    [Crowbar.Engine.UI.Parameter] public int Id { get; set; }\n}\n");
+            File.WriteAllText(Path.Combine(directory, "Item.razor"), "@page \"/items/{id:int}\"\n<div><span>Item @Id</span></div>\n@code {\n    [Microsoft.AspNetCore.Components.Parameter] public int Id { get; set; }\n}\n");
             File.WriteAllText(Path.Combine(directory, "Nav.razor"), "@page \"/nav\"\n<div><button @onclick=\"GoHome\">Back</button></div>\n@code {\n    private void GoHome() { NavigateTo(\"/home\"); }\n}\n");
             using var ui = new UiSystem();
             ui.RegisterRazorComponentsFromDirectory(directory);
@@ -244,7 +244,7 @@ public static class UiSmokeTests
         ui.RegisterRazorComponent("CounterLabel", @"
 <span>@Label</span>
 @code {
-    [Crowbar.Engine.UI.Parameter] public string Label { get; set; } = string.Empty;
+    [Microsoft.AspNetCore.Components.Parameter] public string Label { get; set; } = string.Empty;
 }
 ", "CounterLabel");
         ui.LoadRazor(@"

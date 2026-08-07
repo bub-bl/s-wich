@@ -8,10 +8,7 @@
 
 @code {
 
-    // The standard attribute exposes this property to Razor language services;
-    // the custom attribute keeps the native runtime parameter validation.
     [Parameter]
-    [Engine.UI.Parameter]
     public string Value { get; set; } = string.Empty;
 
     protected override int BuildHash() => HashCode.Combine(Value);

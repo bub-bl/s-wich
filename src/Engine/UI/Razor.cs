@@ -10,9 +10,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Crowbar.Engine.UI;
 
-[AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
-public sealed class ParameterAttribute : Attribute { }
-
 public abstract class RazorPanel : PanelComponent, IComponent
 {
     // Razor's design-time component discovery identifies components through
@@ -135,7 +132,6 @@ public abstract class RazorPanel : PanelComponent, IComponent
         type == typeof(string) ? value : Convert.ChangeType(value, Nullable.GetUnderlyingType(type) ?? type);
 
     private static bool IsRazorParameter(PropertyInfo property) =>
-        property.IsDefined(typeof(ParameterAttribute), true) ||
         property.IsDefined(typeof(Microsoft.AspNetCore.Components.ParameterAttribute), true);
 
     private PropertyInfo? FindParameter(string name)
