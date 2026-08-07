@@ -107,6 +107,8 @@ public static class UiSmokeTests
         TestScopedRazorCss();
         TestAutoRegisteredComponents();
         TestRazorRouting();
+        TestChildContent();
+        TestChildContentTransitions();
     }
 
     private static void TestAutoRegisteredComponents()
@@ -211,6 +213,7 @@ public static class UiSmokeTests
         ui.RegisterRazorComponent("ChildComp", @"
 <div class=""box""><span class=""scoped-label"">Child</span></div>
 ", "ChildComp", cssSource: @"
+root { width: 50px; }
 .box { width: 50px; }
 .scoped-label { color: #00ff00ff; }
 ");
@@ -220,6 +223,7 @@ public static class UiSmokeTests
   <ChildComp />
 </div>
 ", className: "ParentComp", cssSource: @"
+root { width: 99px; height: 99px; }
 .scoped-label { color: #ff0000ff; }
 ");
         ui.Screen.SetViewport(320, 200);
@@ -236,6 +240,16 @@ public static class UiSmokeTests
 
         if (childLabel.ComputedStyle.Color != new UiColor(0, 255, 0, 255))
             throw new InvalidOperationException($"Child label did not receive child scoped style (color={childLabel.ComputedStyle.Color}).");
+
+        // CSS isolation must stop at the component boundary: the child root is
+        // still styled by its own scoped `root` rule, but the parent's scoped
+        // `root` rule must not leak into it.
+        var childRoot = Find(ui.Screen, p => p.TagName == "root" && !ReferenceEquals(p, ui.Content));
+        if (childRoot is null) throw new InvalidOperationException("Child component root was not found.");
+        if (childRoot.ComputedStyle.Width != 50)
+            throw new InvalidOperationException($"Child root lost its own scoped style (width={childRoot.ComputedStyle.Width}).");
+        if (childRoot.ComputedStyle.Height == 99)
+            throw new InvalidOperationException("Parent scoped root rule leaked into the child component root.");
     }
 
     private static void TestReactiveRazor()
@@ -294,6 +308,107 @@ public static class UiSmokeTests
         var rerenderedInput = Find(ui.Screen, p => p is TextInput) as TextInput;
         if (rerenderedInput is null || rerenderedInput.Value != "secondc" || !rerenderedInput.IsFocused)
             throw new InvalidOperationException("Razor input lost its value or focus during binding rerender.");
+    }
+
+    private static void TestChildContent()
+    {
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("Card", @"
+<div class=""card""><div class=""inner"">@ChildContent</div></div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? ChildContent { get; set; }
+}
+", "Card");
+        ui.RegisterRazorComponent("NestedLabel", @"
+<span>@Label</span>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter] public string Label { get; set; } = string.Empty;
+}
+", "NestedLabel");
+        ui.LoadRazor(@"
+<div class=""root"">
+  <Card>
+    <span class=""card-title"">Card title</span>
+    <input value=""@name"" @bind-value=""name"" />
+    <NestedLabel Label=""inside card"" />
+    <label>@name</label>
+  </Card>
+</div>
+@code {
+    private string name = ""first"";
+}
+", "ChildContentDemo");
+        ui.Screen.SetViewport(640, 480);
+        ui.Renderer.Resize(640, 480);
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Card title") is null)
+            throw new InvalidOperationException("ChildContent static markup did not render.");
+        if (Find(ui.Screen, p => p.Text == "first") is null)
+            throw new InvalidOperationException("ChildContent parent expression did not render.");
+        if (Find(ui.Screen, p => p.Text == "inside card") is null)
+            throw new InvalidOperationException("Nested component inside ChildContent did not render.");
+        var textInput = Find(ui.Screen, p => p is TextInput) as TextInput;
+        if (textInput is null) throw new InvalidOperationException("ChildContent input was not created.");
+        textInput.SetValue("second");
+        ui.Update();
+        ui.Render();
+        var rerenderedInput = Find(ui.Screen, p => p is TextInput) as TextInput;
+        if (rerenderedInput is null || rerenderedInput.Value != "second")
+            throw new InvalidOperationException("ChildContent input lost its value across the parent rerender.");
+        if (Find(ui.Screen, p => p.Text == "second") is null)
+            throw new InvalidOperationException("ChildContent @bind-value did not update the parent state.");
+        if (Find(ui.Screen, p => p.Text == "inside card") is null)
+            throw new InvalidOperationException("Nested component inside ChildContent was not preserved across the rerender.");
+    }
+
+    private static void TestChildContentTransitions()
+    {
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("ToggleCard", @"
+<div class=""card""><div class=""inner"">@ChildContent</div></div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? ChildContent { get; set; }
+}
+", "ToggleCard");
+        ui.LoadRazor(@"
+<div class=""root"">
+  <button @onclick=""Toggle"">Toggle</button>
+  @if (show) {
+    <ToggleCard>
+      <span class=""card-title"">Card title</span>
+    </ToggleCard>
+  }
+</div>
+@code {
+    private bool show = true;
+    private void Toggle() { show = !show; StateHasChanged(); }
+}
+", "ToggleDemo");
+        ui.Screen.SetViewport(640, 480);
+        ui.Renderer.Resize(640, 480);
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Card title") is null)
+            throw new InvalidOperationException("ChildContent did not render before the transition test.");
+        var button = Find(ui.Screen, p => p is Button);
+        if (button is null) throw new InvalidOperationException("Transition test toggle button was not found.");
+        // Toggle off: the child content (and the whole component) must disappear.
+        ui.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.Update();
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Card title") is not null)
+            throw new InvalidOperationException("ChildContent was not removed when the component vanished.");
+        // Toggle back on: content must be restored (empty -> populated transition).
+        button = Find(ui.Screen, p => p is Button);
+        if (button is null) throw new InvalidOperationException("Toggle button was lost after the removal.");
+        ui.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+        ui.Update();
+        ui.Render();
+        if (Find(ui.Screen, p => p.Text == "Card title") is null)
+            throw new InvalidOperationException("ChildContent was not restored after being re-added.");
     }
 
     private static Panel? Find(Panel panel, Func<Panel, bool> predicate)

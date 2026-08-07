@@ -23,6 +23,32 @@ public abstract class RazorPanel : PanelComponent, IComponent
     Task IComponent.SetParametersAsync(ParameterView parameters) => Task.CompletedTask;
 
     public string? ScopeId { get; set; }
+
+    /// <summary>
+    /// Placeholder emitted by <see cref="Write"/> when a component renders its
+    /// <c>@ChildContent</c> fragment. The native parser replaces it with the
+    /// panels captured from the markup between the component's tags.
+    /// </summary>
+    internal const string ChildContentMarker = "[[__CROWBAR_CHILDCONTENT__]]";
+
+    /// <summary>Panels captured from the markup between this component's tags, if any.</summary>
+    internal IReadOnlyList<Panel>? ChildContentPanels { get; private set; }
+
+    /// <summary>
+    /// Serialized form of the last captured child content (evaluated markup).
+    /// When it is unchanged across parent renders the component keeps its tree;
+    /// the version below only advances on real content changes so unchanged
+    /// components keep benefiting from the <see cref="BuildHash"/> skip.
+    /// </summary>
+    internal string? ChildContentSignature { get; private set; }
+
+    private int _childContentVersion;
+    private int _builtChildContentVersion = -1;
+
+    internal bool NeedsContentRebuild() => _childContentVersion != _builtChildContentVersion;
+
+    internal void MarkChildContentBuilt() => _builtChildContentVersion = _childContentVersion;
+
     private readonly StringBuilder _output = new();
     private string _attributeSuffix = string.Empty;
     private readonly Dictionary<string, RazorPanel> _childComponents = new(StringComparer.Ordinal);
@@ -31,8 +57,59 @@ public abstract class RazorPanel : PanelComponent, IComponent
 
     protected void WriteLiteral(string value) => _output.Append(value);
 
-    protected void Write(object? value) =>
+    protected void Write(object? value)
+    {
+        // @ChildContent compiles to Write(ChildContent). The fragment content is
+        // captured as panels by the parent's parser; emitting a placeholder here
+        // lets the parser splice them into the child's tree at the right spot.
+        if (value is RenderFragment)
+        {
+            _output.Append(ChildContentMarker);
+            return;
+        }
+
         _output.Append(System.Net.WebUtility.HtmlEncode(value?.ToString() ?? string.Empty));
+    }
+
+    private static readonly RenderFragment EmptyRenderFragment = _ => { };
+
+    /// <summary>
+    /// Captures the panels built from the markup between the component's tags and
+    /// binds them to the <c>[Parameter] ChildContent</c> property (typed
+    /// <see cref="RenderFragment"/>) when one exists. A <see langword="null"/>
+    /// (or empty) list clears a previously captured fragment.
+    /// </summary>
+    internal void SetChildContent(IReadOnlyList<Panel>? panels, string signature)
+    {
+        _childContentVersion++;
+        ChildContentPanels = panels;
+        ChildContentSignature = signature;
+        var property = FindParameter("ChildContent");
+        if (property is not null && !typeof(RenderFragment).IsAssignableFrom(property.PropertyType))
+            property = null; // Not a fragment parameter; nothing to bind or reset.
+        if (panels is not { Count: > 0 })
+        {
+            // No (or no longer any) content between the tags: reset the parameter
+            // so @ChildContent renders nothing and no stale fragment is spliced.
+            if (property is not null && IsRazorParameter(property) && property.CanWrite)
+            {
+                property.SetValue(this, null);
+            }
+
+            return;
+        }
+
+        if (property is null)
+            throw new InvalidOperationException(
+                $"{GetType().Name} does not expose a [Parameter] ChildContent property of type RenderFragment, " +
+                "but markup was provided between its tags.");
+        if (!IsRazorParameter(property))
+            throw new InvalidOperationException(
+                $"Razor property 'ChildContent' on {GetType().Name} is not marked with [Parameter].");
+        if (!property.CanWrite)
+            throw new InvalidOperationException($"Razor parameter 'ChildContent' on {GetType().Name} is read-only.");
+        property.SetValue(this, EmptyRenderFragment);
+    }
 
     // Helpers emitted by Razor for attributes containing C# expressions,
     // e.g. value="@name". The native renderer still receives plain markup;
@@ -128,8 +205,14 @@ public abstract class RazorPanel : PanelComponent, IComponent
         throw new InvalidOperationException($"Razor parameter '{name}' was not found on {GetType().Name}.");
     }
 
-    private static object? ConvertParameter(string value, Type type) =>
-        type == typeof(string) ? value : Convert.ChangeType(value, Nullable.GetUnderlyingType(type) ?? type);
+    private static object? ConvertParameter(string value, Type type)
+    {
+        if (typeof(RenderFragment).IsAssignableFrom(type))
+            throw new InvalidOperationException(
+                $"Razor parameter of type {type.Name} cannot be set from a string attribute; " +
+                "pass the content between the component tags instead.");
+        return type == typeof(string) ? value : Convert.ChangeType(value, Nullable.GetUnderlyingType(type) ?? type);
+    }
 
     private static bool IsRazorParameter(PropertyInfo property) =>
         property.IsDefined(typeof(Microsoft.AspNetCore.Components.ParameterAttribute), true);
@@ -375,8 +458,8 @@ public sealed class RazorComponentFactory(IReadOnlyDictionary<string, Func<Razor
 
     public PanelComponent BuildTree(RazorPanel template)
     {
-        if (!template.NeedsBuild()) return template;
-        if (template.NeedsBuild() && !template.CanRender())
+        if (!template.NeedsBuild() && !template.NeedsContentRebuild()) return template;
+        if (!template.CanRender())
         {
             template.MarkRenderSkipped();
             return template;
@@ -387,6 +470,7 @@ public sealed class RazorComponentFactory(IReadOnlyDictionary<string, Func<Razor
         var root = HtmlPanelParser.Parse(markup, template, _components);
         template.EndRenderPass();
         var firstRender = template.MarkBuilt(null);
+        template.MarkChildContentBuilt();
         template.NotifyRendered(firstRender);
         return root;
     }
@@ -579,8 +663,12 @@ internal static class HtmlPanelParser
             var index = 0;
             foreach (var node in xml.Root!.Nodes())
             {
+                // Keys mirror panel positions so that preserved inputs and child
+                // components line up across renders. Whitespace-only text nodes
+                // produce no panel, so they must not consume an index.
+                if (node is XText whitespace && string.IsNullOrWhiteSpace(whitespace.Value)) continue;
                 AddNode(root, node, root, components, $"root/{index}", preservedInputs);
-                if (node is XElement) index++;
+                index++;
             }
 
             return root;
@@ -608,11 +696,22 @@ internal static class HtmlPanelParser
         IReadOnlyDictionary<string, Func<RazorPanel>>? components, string key,
         IReadOnlyDictionary<string, TextInput> preservedInputs)
     {
-        if (node is XText text && !string.IsNullOrWhiteSpace(text.Value))
+        if (node is XText text)
         {
-            var textPanel = new Panel { TagName = "text", Text = text.Value };
-            if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
-            parent.AddChild(textPanel);
+            if (runtime.ChildContentPanels is not null &&
+                text.Value.Contains(RazorPanel.ChildContentMarker, StringComparison.Ordinal))
+            {
+                SpliceChildContent(parent, text.Value, runtime, key, preservedInputs);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(text.Value))
+            {
+                var textPanel = new Panel { TagName = "text", Text = text.Value };
+                if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
+                parent.AddChild(textPanel);
+            }
+
             return;
         }
 
@@ -632,8 +731,36 @@ internal static class HtmlPanelParser
                 else child.SetParameter(attribute.Name.LocalName, attribute.Value);
             }
 
+            // Capture the markup between the component's tags. It is parsed with
+            // the parent as runtime: expressions were already evaluated by the
+            // parent's ExecuteAsync and event/binding attributes refer to parent
+            // members. The panels are handed to the child so its @ChildContent
+            // placeholder (a marker text node) can be replaced by them.
+            var childContentNodes = new List<XNode>();
+            foreach (var childNode in element.Nodes())
+                if (childNode is not XText whitespace || !string.IsNullOrWhiteSpace(whitespace.Value))
+                    childContentNodes.Add(childNode);
+            var contentSignature = string.Concat(childContentNodes.Select(node => node.ToString()));
+            if (contentSignature != child.ChildContentSignature)
+            {
+                List<Panel>? fragment = null;
+                if (childContentNodes.Count > 0)
+                {
+                    var container = new Panel();
+                    var emptyPreserved = new Dictionary<string, TextInput>(StringComparer.Ordinal);
+                    for (var contentIndex = 0; contentIndex < childContentNodes.Count; contentIndex++)
+                        AddNode(container, childContentNodes[contentIndex], runtime, components,
+                            $"{key}/content/{contentIndex}", emptyPreserved);
+                    fragment = [.. container.Children];
+                }
+
+                child.SetChildContent(fragment, contentSignature);
+            }
+
             var childTree = new RazorComponentFactory(components).BuildTree(child);
-            if (!string.IsNullOrEmpty(runtime.ScopeId)) childTree.AddScope(runtime.ScopeId);
+            // The child tree keeps only its own scope. Applying the parent's scope
+            // to the child's root would leak parent scoped CSS (e.g. the page's
+            // `root { height: ... }` rule) into every nested component root.
             parent.AddChild(childTree);
             return;
         }
@@ -676,8 +803,9 @@ internal static class HtmlPanelParser
         var childIndex = 0;
         foreach (var child in element.Nodes())
         {
+            if (child is XText whitespace && string.IsNullOrWhiteSpace(whitespace.Value)) continue;
             AddNode(panel, child, runtime, components, $"{key}/{childIndex}", preservedInputs);
-            if (child is XElement) childIndex++;
+            childIndex++;
         }
 
         if (panel is TextInput inputValue)
@@ -699,6 +827,61 @@ internal static class HtmlPanelParser
         }
 
         parent.AddChild(panel);
+    }
+
+    /// <summary>
+    /// Replaces the ChildContent marker text node with the captured fragment
+    /// panels, preserving any surrounding text and restoring input state with
+    /// keys relative to the current tree (fragment inputs were built fresh by
+    /// the parent's capture pass, so they are restored here instead).
+    /// </summary>
+    private static void SpliceChildContent(Panel parent, string content, RazorPanel runtime, string key,
+        IReadOnlyDictionary<string, TextInput> preservedInputs)
+    {
+        var markerIndex = content.IndexOf(RazorPanel.ChildContentMarker, StringComparison.Ordinal);
+        var prefix = content[..markerIndex];
+        var suffix = content[(markerIndex + RazorPanel.ChildContentMarker.Length)..];
+        var lastSlash = key.LastIndexOf('/');
+        var parentKey = lastSlash > 0 ? key[..lastSlash] : key;
+        var baseIndex = lastSlash > 0 && int.TryParse(key[(lastSlash + 1)..], out var parsed) ? parsed : 0;
+        var insertIndex = baseIndex;
+        if (!string.IsNullOrWhiteSpace(prefix))
+        {
+            var textPanel = new Panel { TagName = "text", Text = prefix };
+            if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
+            parent.AddChild(textPanel);
+            insertIndex++;
+        }
+
+        if (runtime.ChildContentPanels is not null)
+        {
+            foreach (var panel in runtime.ChildContentPanels)
+            {
+                RestorePreservedInputs(panel, $"{parentKey}/{insertIndex}", preservedInputs);
+                parent.AddChild(panel);
+                insertIndex++;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(suffix))
+        {
+            var textPanel = new Panel { TagName = "text", Text = suffix };
+            if (!string.IsNullOrEmpty(runtime.ScopeId)) textPanel.AddScope(runtime.ScopeId);
+            parent.AddChild(textPanel);
+        }
+    }
+
+    private static void RestorePreservedInputs(Panel panel, string key,
+        IReadOnlyDictionary<string, TextInput> preservedInputs)
+    {
+        if (panel is TextInput input && preservedInputs.TryGetValue(key, out var previous))
+        {
+            input.SetValue(previous.Value, previous.CaretIndex);
+            input.CopyInteractionStateFrom(previous);
+        }
+
+        for (var i = 0; i < panel.Children.Count; i++)
+            RestorePreservedInputs(panel.Children[i], $"{key}/{i}", preservedInputs);
     }
 }
 

@@ -1,0 +1,10 @@
+root {
+    width: 504px;
+}
+
+.card-box {
+    width: 504px;
+    padding: 12px;
+    background-color: #1b2942ff;
+    border-radius: 10px;
+}

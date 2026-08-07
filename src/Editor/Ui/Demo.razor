@@ -23,9 +23,15 @@
         <div class="status">LAST ACTION REGISTERED</div>
     }
 
-    <div class="field-label">INPUT FIELD</div>
-    <input class="field" value="@name" @bind-value="name"/>
-    <div class="status">@name</div>
+    <MyButton Value="Salut mec"></MyButton>
+    <MyButton Value="Salut mec"></MyButton>
+    <MyButton Value="Salut mec"></MyButton>
+    
+    <Card>
+        <div class="field-label">INPUT FIELD (ChildContent)</div>
+        <input class="field" value="@name" @bind-value="name"/>
+        <div class="status">@name</div>
+    </Card>
 
     <div class="footer">@pipelineLabel</div>
     
