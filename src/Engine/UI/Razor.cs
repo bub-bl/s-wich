@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Razor.Language;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,8 +13,18 @@ namespace Crowbar.Engine.UI;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
 public sealed class ParameterAttribute : Attribute { }
 
-public abstract class RazorPanel : PanelComponent
+public abstract class RazorPanel : PanelComponent, IComponent
 {
+    // Razor's design-time component discovery identifies components through
+    // IComponent. The native renderer does not use Blazor's render pipeline,
+    // so these explicit no-op implementations only provide the standard
+    // contract required by the Razor language services.
+    void IComponent.Attach(RenderHandle renderHandle)
+    {
+    }
+
+    Task IComponent.SetParametersAsync(ParameterView parameters) => Task.CompletedTask;
+
     public string? ScopeId { get; set; }
     private readonly StringBuilder _output = new();
     private string _attributeSuffix = string.Empty;
@@ -22,19 +33,23 @@ public abstract class RazorPanel : PanelComponent
     private bool _initialized;
 
     protected void WriteLiteral(string value) => _output.Append(value);
-    protected void Write(object? value) => _output.Append(System.Net.WebUtility.HtmlEncode(value?.ToString() ?? string.Empty));
+
+    protected void Write(object? value) =>
+        _output.Append(System.Net.WebUtility.HtmlEncode(value?.ToString() ?? string.Empty));
 
     // Helpers emitted by Razor for attributes containing C# expressions,
     // e.g. value="@name". The native renderer still receives plain markup;
     // these methods only reproduce the small writer contract needed by the
     // generated Razor class.
-    protected void BeginWriteAttribute(string name, string prefix, int prefixOffset, string suffix, int suffixOffset, int attributeValuesCount)
+    protected void BeginWriteAttribute(string name, string prefix, int prefixOffset, string suffix, int suffixOffset,
+        int attributeValuesCount)
     {
         _attributeSuffix = suffix;
         _output.Append(prefix);
     }
 
-    protected void WriteAttributeValue(string prefix, int prefixOffset, object? value, int valueOffset, int valueLength, bool isLiteral)
+    protected void WriteAttributeValue(string prefix, int prefixOffset, object? value, int valueOffset, int valueLength,
+        bool isLiteral)
     {
         _output.Append(prefix);
         var text = value?.ToString() ?? string.Empty;
@@ -43,13 +58,26 @@ public abstract class RazorPanel : PanelComponent
 
     protected void EndWriteAttribute() => _output.Append(_attributeSuffix);
 
-    protected virtual void OnInitialized() { }
-    protected virtual void OnParametersSet() { }
-    protected virtual void OnAfterRender(bool firstRender) { }
+    protected virtual void OnInitialized()
+    {
+    }
+
+    protected virtual void OnParametersSet()
+    {
+    }
+
+    protected virtual void OnAfterRender(bool firstRender)
+    {
+    }
 
     internal async Task<string> RenderMarkupAsync()
     {
-        if (!_initialized) { _initialized = true; OnInitialized(); }
+        if (!_initialized)
+        {
+            _initialized = true;
+            OnInitialized();
+        }
+
         OnParametersSet();
         _output.Clear();
         await ExecuteAsync();
@@ -58,6 +86,7 @@ public abstract class RazorPanel : PanelComponent
 
     internal void NotifyRendered(bool firstRender) => OnAfterRender(firstRender);
     internal void BeginRenderPass() => _activeChildren.Clear();
+
     internal RazorPanel GetOrCreateChild(string key, Func<RazorPanel> factory)
     {
         if (!_childComponents.TryGetValue(key, out var child))
@@ -65,36 +94,53 @@ public abstract class RazorPanel : PanelComponent
             child = factory();
             _childComponents[key] = child;
         }
+
         _activeChildren.Add(key);
         return child;
     }
+
     internal void EndRenderPass()
     {
         foreach (var key in _childComponents.Keys.Where(key => !_activeChildren.Contains(key)).ToArray())
             _childComponents.Remove(key);
     }
+
     internal void SetParameter(string name, string value)
     {
         var property = FindParameter(name);
         if (property is not null)
         {
-            if (!property.IsDefined(typeof(ParameterAttribute), true))
-                throw new InvalidOperationException($"Razor property '{name}' on {GetType().Name} is not marked with [Parameter].");
+            if (!IsRazorParameter(property))
+                throw new InvalidOperationException(
+                    $"Razor property '{name}' on {GetType().Name} is not marked with [Parameter].");
             if (!property.CanWrite)
                 throw new InvalidOperationException($"Razor parameter '{name}' on {GetType().Name} is read-only.");
-            try { property.SetValue(this, ConvertParameter(value, property.PropertyType)); }
-            catch (Exception ex) { throw new InvalidOperationException($"Razor parameter '{name}' on {GetType().Name} could not convert value '{value}'.", ex); }
+            try
+            {
+                property.SetValue(this, ConvertParameter(value, property.PropertyType));
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Razor parameter '{name}' on {GetType().Name} could not convert value '{value}'.", ex);
+            }
+
             return;
         }
+
         throw new InvalidOperationException($"Razor parameter '{name}' was not found on {GetType().Name}.");
     }
 
     private static object? ConvertParameter(string value, Type type) =>
         type == typeof(string) ? value : Convert.ChangeType(value, Nullable.GetUnderlyingType(type) ?? type);
 
+    private static bool IsRazorParameter(PropertyInfo property) =>
+        property.IsDefined(typeof(ParameterAttribute), true) ||
+        property.IsDefined(typeof(Microsoft.AspNetCore.Components.ParameterAttribute), true);
+
     private PropertyInfo? FindParameter(string name)
     {
-        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         var exact = GetType().GetProperty(name, flags);
         if (exact is not null) return exact;
         // Case-insensitive fallback (route parameters, attribute casing). When
@@ -106,6 +152,7 @@ public abstract class RazorPanel : PanelComponent
             .ThenBy(p => p.Name.Equals(name, StringComparison.Ordinal) ? 0 : 1)
             .FirstOrDefault();
     }
+
     internal Action<string>? NavigationRequested { get; set; }
 
     protected void NavigateTo(string url)
@@ -123,21 +170,20 @@ public abstract class RazorPanel : PanelComponent
 }
 
 /// <summary>Compatibility name for components compiled by earlier versions.</summary>
-public abstract class RazorTemplateBase : RazorPanel { }
+public abstract class RazorTemplateBase : RazorPanel
+{
+}
 
 public interface IRazorComponentCompiler
 {
     PanelComponent Compile(string razorSource, string className, Type baseType, params Assembly[] references);
 }
 
-public sealed class RazorComponentFactory : IRazorComponentCompiler
+public sealed class RazorComponentFactory(IReadOnlyDictionary<string, Func<RazorPanel>>? components = null)
+    : IRazorComponentCompiler
 {
-    private readonly IReadOnlyDictionary<string, Func<RazorPanel>> _components;
-
-    public RazorComponentFactory(IReadOnlyDictionary<string, Func<RazorPanel>>? components = null)
-    {
-        _components = components ?? new Dictionary<string, Func<RazorPanel>>(StringComparer.OrdinalIgnoreCase);
-    }
+    private readonly IReadOnlyDictionary<string, Func<RazorPanel>> _components =
+        components ?? new Dictionary<string, Func<RazorPanel>>(StringComparer.OrdinalIgnoreCase);
 
     public PanelComponent Compile(string razorSource, string className, Type baseType, params Assembly[] references)
     {
@@ -156,7 +202,8 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
     /// (path, className, write time) so hot reloads of unchanged files skip the
     /// Roslyn emit. A fresh template instance is created on every call.
     /// </summary>
-    public RazorPanel CompileTemplateFromFile(string razorPath, string className, Type baseType, params Assembly[] references)
+    public RazorPanel CompileTemplateFromFile(string razorPath, string className, Type baseType,
+        params Assembly[] references)
     {
         razorPath = Path.GetFullPath(razorPath);
         var writeTime = File.GetLastWriteTimeUtc(razorPath).Ticks;
@@ -167,10 +214,12 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
             assembly = CompileAssembly(ReadStableFileText(razorPath), className, baseType, references);
             TemplateAssemblyCache.Set(cacheKey, writeTime, assembly);
         }
+
         return CreateTemplate(assembly, className);
     }
 
-    private Assembly CompileAssembly(string razorSource, string className, Type baseType, params Assembly[] references)
+    private static Assembly CompileAssembly(string razorSource, string className, Type baseType,
+        params Assembly[] references)
     {
         // Event and binding expressions are intentionally converted to stable
         // markers before Razor parses the document. This keeps the generated
@@ -178,19 +227,22 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         // allowing the native Panel tree to attach delegates after rendering.
         var directives = ExtractDirectives(razorSource);
         var source = directives.Source;
-        var classMembers = directives.ClassMembers;
+        var classMembers = NormalizeRuntimeTypeNames(directives.ClassMembers);
         baseType = ResolveBaseType(directives.BaseTypeName, baseType, references, directives.Usings);
         if (!typeof(RazorPanel).IsAssignableFrom(baseType))
             throw new InvalidOperationException($"Razor base type '{baseType.FullName}' must derive from RazorPanel.");
-        if (baseType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null) is null)
-            throw new InvalidOperationException($"Razor base type '{baseType.FullName}' must have a parameterless constructor.");
+        if (baseType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null,
+                Type.EmptyTypes, null) is null)
+            throw new InvalidOperationException(
+                $"Razor base type '{baseType.FullName}' must have a parameterless constructor.");
         source = RewriteUiAttributes(source);
         var document = RazorSourceDocument.Create(source, className + ".razor");
-        var project = RazorProjectEngine.Create(RazorConfiguration.Default, RazorProjectFileSystem.Create(AppContext.BaseDirectory), b =>
-        {
-            b.SetNamespace(directives.NamespaceName ?? "Crowbar.Engine.UI.Generated");
-            b.SetBaseType(typeof(RazorPanel).FullName!);
-        });
+        var project = RazorProjectEngine.Create(RazorConfiguration.Default,
+            RazorProjectFileSystem.Create(AppContext.BaseDirectory), b =>
+            {
+                b.SetNamespace(directives.NamespaceName ?? "Crowbar.Engine.UI.Generated");
+                b.SetBaseType(typeof(RazorPanel).FullName!);
+            });
         var codeDocument = project.Process(document, className + ".razor", [], []);
         var generatedCode = codeDocument.GetCSharpDocument().GeneratedCode;
         var defaultUsings = new[]
@@ -202,33 +254,43 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
             "System.Threading.Tasks"
         };
         var generatedUsings = defaultUsings.Concat(directives.Usings).Distinct(StringComparer.Ordinal);
-        generatedCode = string.Join(Environment.NewLine, generatedUsings.Select(usingName => $"using {usingName};")) + Environment.NewLine + generatedCode;
+        generatedCode = string.Join(Environment.NewLine, generatedUsings.Select(usingName => $"using {usingName};")) +
+                        Environment.NewLine + generatedCode;
         if (!string.IsNullOrWhiteSpace(classMembers))
         {
             var generatedTree = CSharpSyntaxTree.ParseText(generatedCode);
-            var generatedClass = generatedTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-            if (generatedClass is null) throw new InvalidOperationException("Razor output did not contain a generated class.");
+            var generatedClass = generatedTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault();
+            if (generatedClass is null)
+                throw new InvalidOperationException("Razor output did not contain a generated class.");
             generatedCode = generatedCode.Insert(generatedClass.CloseBraceToken.SpanStart, "\n" + classMembers + "\n");
         }
-        var interfaceTypes = directives.Interfaces.Select(name => ResolveType(name, references, "interface", directives.Usings)).ToArray();
+
+        var interfaceTypes = directives.Interfaces
+            .Select(name => ResolveType(name, references, "interface", directives.Usings)).ToArray();
         var generatedTreeWithContracts = CSharpSyntaxTree.ParseText(generatedCode);
-        var generatedClassWithContracts = generatedTreeWithContracts.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault()
-            ?? throw new InvalidOperationException("Razor output did not contain a generated class.");
+        var generatedClassWithContracts = generatedTreeWithContracts.GetRoot().DescendantNodes()
+                                              .OfType<ClassDeclarationSyntax>().FirstOrDefault()
+                                          ?? throw new InvalidOperationException(
+                                              "Razor output did not contain a generated class.");
         var generatedBaseTypes = new List<BaseTypeSyntax>
         {
             SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseType.FullName!))
         };
-        generatedBaseTypes.AddRange(interfaceTypes.Select(type => SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(type.FullName!))));
+        generatedBaseTypes.AddRange(interfaceTypes.Select(type =>
+            SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(type.FullName!))));
         var classWithContracts = generatedClassWithContracts.WithBaseList(
             SyntaxFactory.BaseList(SyntaxFactory.SeparatedList(generatedBaseTypes)));
-        generatedCode = generatedTreeWithContracts.GetRoot().ReplaceNode(generatedClassWithContracts, classWithContracts).ToFullString();
+        generatedCode = generatedTreeWithContracts.GetRoot()
+            .ReplaceNode(generatedClassWithContracts, classWithContracts).ToFullString();
         var tree = CSharpSyntaxTree.ParseText(generatedCode);
         var platformReferences = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(path => MetadataReference.CreateFromFile(path));
         var assemblyReferences = references.Concat([
                 typeof(object).Assembly, typeof(Enumerable).Assembly,
-                typeof(RazorPanel).Assembly, typeof(RazorProjectEngine).Assembly])
+                typeof(RazorPanel).Assembly, typeof(RazorProjectEngine).Assembly
+            ])
             .Distinct().Select(a => MetadataReference.CreateFromFile(a.Location)).Concat(platformReferences);
         var compilation = CSharpCompilation.Create(
             "Crowbar.Razor." + Guid.NewGuid().ToString("N"), [tree], assemblyReferences,
@@ -236,18 +298,22 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
         if (!result.Success)
-            throw new InvalidOperationException("Razor compilation failed:\n" + string.Join('\n', result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
+            throw new InvalidOperationException("Razor compilation failed:\n" + string.Join('\n',
+                result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
         stream.Position = 0;
         return Assembly.Load(stream.ToArray());
     }
 
     private static RazorPanel CreateTemplate(Assembly assembly, string className)
     {
-        var generatedType = assembly.GetTypes().FirstOrDefault(t => t.Name.Equals(className, StringComparison.OrdinalIgnoreCase))
-            ?? assembly.GetTypes().FirstOrDefault(t => typeof(RazorPanel).IsAssignableFrom(t));
-        if (generatedType is null) throw new InvalidOperationException("Razor output did not contain a component type.");
+        var generatedType = assembly.GetTypes()
+                                .FirstOrDefault(t => t.Name.Equals(className, StringComparison.OrdinalIgnoreCase))
+                            ?? assembly.GetTypes().FirstOrDefault(t => typeof(RazorPanel).IsAssignableFrom(t));
+        if (generatedType is null)
+            throw new InvalidOperationException("Razor output did not contain a component type.");
         var templateInstance = (RazorPanel)Activator.CreateInstance(generatedType)!;
-        if (string.IsNullOrEmpty(templateInstance.ScopeId)) templateInstance.ScopeId = $"b-{className.ToLowerInvariant()}";
+        if (string.IsNullOrEmpty(templateInstance.ScopeId))
+            templateInstance.ScopeId = $"b-{className.ToLowerInvariant()}";
         return templateInstance;
     }
 
@@ -270,6 +336,7 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
                 Thread.Sleep(25);
             }
         }
+
         return previous ?? File.ReadAllText(path);
     }
 
@@ -278,7 +345,10 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
     private sealed class TemplateAssemblyCacheStore
     {
         private const int MaxEntries = 32;
-        private readonly Dictionary<string, (long WriteTime, Assembly Assembly, long LastUse)> _entries = new(StringComparer.Ordinal);
+
+        private readonly Dictionary<string, (long WriteTime, Assembly Assembly, long LastUse)> _entries =
+            new(StringComparer.Ordinal);
+
         private readonly object _lock = new();
 
         public Assembly? Get(string key, long writeTime)
@@ -291,6 +361,7 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
                     return entry.Assembly;
                 }
             }
+
             return null;
         }
 
@@ -314,6 +385,7 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
             template.MarkRenderSkipped();
             return template;
         }
+
         template.BeginRenderPass();
         var markup = template.RenderMarkupAsync().GetAwaiter().GetResult();
         var root = HtmlPanelParser.Parse(markup, template, _components);
@@ -322,6 +394,9 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
         template.NotifyRendered(firstRender);
         return root;
     }
+
+    private static string NormalizeRuntimeTypeNames(string source) =>
+        Regex.Replace(source, @"(?<!global::)\bCrowbar\.Engine\.UI\.", "global::Crowbar.Engine.UI.");
 
     private static string RewriteUiAttributes(string source)
     {
@@ -354,6 +429,7 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
                 val = val[1..^1].Trim();
             }
         }
+
         return val;
     }
 
@@ -363,71 +439,138 @@ public sealed class RazorComponentFactory : IRazorComponentCompiler
     public static string[] ExtractPages(string source) =>
         Regex.Matches(source, PageDirectivePattern).Select(match => match.Groups[1].Value.Trim()).ToArray();
 
-    private static (string Source, string ClassMembers, string? BaseTypeName, IReadOnlyList<string> Interfaces, IReadOnlyList<string> Usings, string? NamespaceName, IReadOnlyList<string> Pages) ExtractDirectives(string source)
+    private static (string Source, string ClassMembers, string? BaseTypeName, IReadOnlyList<string> Interfaces,
+        IReadOnlyList<string> Usings, string? NamespaceName, IReadOnlyList<string> Pages) ExtractDirectives(
+            string source)
     {
         var pages = Regex.Matches(source, PageDirectivePattern).Select(match => match.Groups[1].Value.Trim()).ToArray();
         var baseMatch = Regex.Match(source, @"(?m)^\s*@inherits\s+([^\r\n]+)\s*$");
-        var interfaces = Regex.Matches(source, @"(?m)^\s*@implements\s+([^\r\n]+)\s*$").Select(match => match.Groups[1].Value.Trim()).ToArray();
-        var usings = Regex.Matches(source, @"(?m)^\s*@using\s+([^\r\n;]+);?\s*$").Select(match => match.Groups[1].Value.Trim()).ToArray();
+        var interfaces = Regex.Matches(source, @"(?m)^\s*@implements\s+([^\r\n]+)\s*$")
+            .Select(match => match.Groups[1].Value.Trim()).ToArray();
+        var usings = Regex.Matches(source, @"(?m)^\s*@using\s+([^\r\n;]+);?\s*$")
+            .Select(match => match.Groups[1].Value.Trim()).ToArray();
         var namespaceMatch = Regex.Match(source, @"(?m)^\s*@namespace\s+([^\r\n]+)\s*$");
         var removable = new List<(int Index, int Length)>();
         if (baseMatch.Success) removable.Add((baseMatch.Index, baseMatch.Length));
-        removable.AddRange(Regex.Matches(source, @"(?m)^\s*@implements\s+([^\r\n]+)\s*$").Select(match => (match.Index, match.Length)));
-        removable.AddRange(Regex.Matches(source, @"(?m)^\s*@using\s+([^\r\n;]+);?\s*$").Select(match => (match.Index, match.Length)));
+        removable.AddRange(Regex.Matches(source, @"(?m)^\s*@implements\s+([^\r\n]+)\s*$")
+            .Select(match => (match.Index, match.Length)));
+        removable.AddRange(Regex.Matches(source, @"(?m)^\s*@using\s+([^\r\n;]+);?\s*$")
+            .Select(match => (match.Index, match.Length)));
         removable.AddRange(Regex.Matches(source, PageDirectivePattern).Select(match => (match.Index, match.Length)));
         if (namespaceMatch.Success) removable.Add((namespaceMatch.Index, namespaceMatch.Length));
-        foreach (var match in removable.OrderByDescending(match => match.Index)) source = source.Remove(match.Index, match.Length);
+        foreach (var match in removable.OrderByDescending(match => match.Index))
+            source = source.Remove(match.Index, match.Length);
         var first = Regex.Match(source, "@code\\s*{", RegexOptions.IgnoreCase);
-        if (!first.Success) return (source, string.Empty, baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null, pages);
+        if (!first.Success)
+            return (source, string.Empty, baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces,
+                usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null, pages);
         var second = Regex.Match(source[(first.Index + first.Length)..], "@code\\s*{", RegexOptions.IgnoreCase);
         if (second.Success) throw new InvalidOperationException("A Razor component may contain only one @code block.");
         var open = source.IndexOf('{', first.Index);
         var close = FindClosingBrace(source, open);
         var withoutCode = source.Remove(first.Index, close - first.Index + 1);
-        return (withoutCode, source.Substring(open + 1, close - open - 1), baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings, namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null, pages);
+        return (withoutCode, source.Substring(open + 1, close - open - 1),
+            baseMatch.Success ? baseMatch.Groups[1].Value.Trim() : null, interfaces, usings,
+            namespaceMatch.Success ? namespaceMatch.Groups[1].Value.Trim() : null, pages);
     }
 
     private static int FindClosingBrace(string source, int open)
     {
-        var depth = 0; var state = 0; var escaped = false;
+        var depth = 0;
+        var state = 0;
+        var escaped = false;
         for (var i = open; i < source.Length; i++)
         {
             var c = source[i];
-            if (state == 1) { if (c == '\n') state = 0; continue; }
-            if (state == 2) { if (c == '*' && i + 1 < source.Length && source[i + 1] == '/') { state = 0; i++; } continue; }
+            if (state == 1)
+            {
+                if (c == '\n') state = 0;
+                continue;
+            }
+
+            if (state == 2)
+            {
+                if (c == '*' && i + 1 < source.Length && source[i + 1] == '/')
+                {
+                    state = 0;
+                    i++;
+                }
+
+                continue;
+            }
+
             if (state is 3 or 4)
             {
-                if (escaped) { escaped = false; continue; }
-                if (c == '\\' && state == 3) { escaped = true; continue; }
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (c == '\\' && state == 3)
+                {
+                    escaped = true;
+                    continue;
+                }
+
                 if ((state == 3 && c == '"') || (state == 4 && c == '\'')) state = 0;
                 continue;
             }
-            if (c == '/' && i + 1 < source.Length && source[i + 1] == '/') { state = 1; i++; continue; }
-            if (c == '/' && i + 1 < source.Length && source[i + 1] == '*') { state = 2; i++; continue; }
-            if (c == '"') { state = 3; continue; }
-            if (c == '\'') { state = 4; continue; }
+
+            if (c == '/' && i + 1 < source.Length && source[i + 1] == '/')
+            {
+                state = 1;
+                i++;
+                continue;
+            }
+
+            if (c == '/' && i + 1 < source.Length && source[i + 1] == '*')
+            {
+                state = 2;
+                i++;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                state = 3;
+                continue;
+            }
+
+            if (c == '\'')
+            {
+                state = 4;
+                continue;
+            }
+
             if (c == '{') depth++;
             else if (c == '}' && --depth == 0) return i;
         }
+
         throw new InvalidOperationException("Razor @code block is missing its closing brace.");
     }
 
-    private static Type ResolveBaseType(string? name, Type fallback, Assembly[] references, IReadOnlyList<string> usings) =>
+    private static Type ResolveBaseType(string? name, Type fallback, Assembly[] references,
+        IReadOnlyList<string> usings) =>
         name is null && typeof(RazorPanel).IsAssignableFrom(fallback) ? fallback :
         name is null ? typeof(RazorPanel) : ResolveType(name, references, "base type", usings);
+
     private static Type ResolveType(string name, Assembly[] references, string kind, IReadOnlyList<string> usings)
     {
         var candidates = references.Concat(AppDomain.CurrentDomain.GetAssemblies()).Distinct();
         var names = new[] { name }.Concat(usings.Select(usingName => usingName + "." + name));
-        var type = names.SelectMany(candidate => candidates.Select(assembly => assembly.GetType(candidate, false, false)))
-            .FirstOrDefault(found => found is not null) ?? names.Select(candidate => Type.GetType(candidate, false, false)).FirstOrDefault(found => found is not null);
+        var type = names
+            .SelectMany(candidate => candidates.Select(assembly => assembly.GetType(candidate, false, false)))
+            .FirstOrDefault(found => found is not null) ?? names
+            .Select(candidate => Type.GetType(candidate, false, false)).FirstOrDefault(found => found is not null);
         return type ?? throw new InvalidOperationException($"Razor {kind} '{name}' could not be resolved.");
     }
 }
 
 internal static class HtmlPanelParser
 {
-    public static PanelComponent Parse(string markup, RazorPanel root, IReadOnlyDictionary<string, Func<RazorPanel>>? components = null)
+    public static PanelComponent Parse(string markup, RazorPanel root,
+        IReadOnlyDictionary<string, Func<RazorPanel>>? components = null)
     {
         root.TagName = "root";
         if (!string.IsNullOrEmpty(root.ScopeId)) root.AddScope(root.ScopeId);
@@ -443,6 +586,7 @@ internal static class HtmlPanelParser
                 AddNode(root, node, root, components, $"root/{index}", preservedInputs);
                 if (node is XElement) index++;
             }
+
             return root;
         }
         catch (Exception ex)
@@ -464,7 +608,9 @@ internal static class HtmlPanelParser
         }
     }
 
-    private static void AddNode(Panel parent, XNode node, RazorPanel runtime, IReadOnlyDictionary<string, Func<RazorPanel>>? components, string key, IReadOnlyDictionary<string, TextInput> preservedInputs)
+    private static void AddNode(Panel parent, XNode node, RazorPanel runtime,
+        IReadOnlyDictionary<string, Func<RazorPanel>>? components, string key,
+        IReadOnlyDictionary<string, TextInput> preservedInputs)
     {
         if (node is XText text && !string.IsNullOrWhiteSpace(text.Value))
         {
@@ -473,6 +619,7 @@ internal static class HtmlPanelParser
             parent.AddChild(textPanel);
             return;
         }
+
         if (node is not XElement element) return;
         if (components is not null && components.TryGetValue(element.Name.LocalName, out var componentFactory))
         {
@@ -482,16 +629,19 @@ internal static class HtmlPanelParser
             foreach (var attribute in element.Attributes())
             {
                 if (attribute.Name.LocalName.Equals("class", StringComparison.OrdinalIgnoreCase))
-                    foreach (var value in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)) child.AddClass(value);
+                    foreach (var value in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                        child.AddClass(value);
                 else if (attribute.Name.LocalName.StartsWith("data-codex-", StringComparison.OrdinalIgnoreCase))
                     continue; // Skip synthetic event attributes – they are handled only on HTML elements
                 else child.SetParameter(attribute.Name.LocalName, attribute.Value);
             }
+
             var childTree = new RazorComponentFactory(components).BuildTree(child);
             if (!string.IsNullOrEmpty(runtime.ScopeId)) childTree.AddScope(runtime.ScopeId);
             parent.AddChild(childTree);
             return;
         }
+
         var panel = element.Name.LocalName.ToLowerInvariant() switch
         {
             "button" => new Button(),
@@ -506,21 +656,34 @@ internal static class HtmlPanelParser
         string? declaredValue = null;
         foreach (var attribute in element.Attributes())
         {
-            if (attribute.Name == "class") foreach (var c in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)) panel.AddClass(c);
+            if (attribute.Name == "class")
+                foreach (var c in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    panel.AddClass(c);
             else if (attribute.Name == "id") panel.Id = attribute.Value;
-            else if (attribute.Name == "style") foreach (var declaration in attribute.Value.Split(';')) { var p = declaration.Split(':', 2); if (p.Length == 2) panel.SetInlineStyle(p[0].Trim(), p[1].Trim()); }
-            else if (attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase) && panel is TextInput) declaredValue = attribute.Value;
-            else if (attribute.Name.LocalName.Equals("data-codex-onclick", StringComparison.OrdinalIgnoreCase)) click = attribute.Value;
-            else if (attribute.Name.LocalName.Equals("data-codex-onchange", StringComparison.OrdinalIgnoreCase)) change = attribute.Value;
-            else if (attribute.Name.LocalName.Equals("data-codex-bind-value", StringComparison.OrdinalIgnoreCase)) bind = attribute.Value;
+            else if (attribute.Name == "style")
+                foreach (var declaration in attribute.Value.Split(';'))
+                {
+                    var p = declaration.Split(':', 2);
+                    if (p.Length == 2) panel.SetInlineStyle(p[0].Trim(), p[1].Trim());
+                }
+            else if (attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase) && panel is TextInput)
+                declaredValue = attribute.Value;
+            else if (attribute.Name.LocalName.Equals("data-codex-onclick", StringComparison.OrdinalIgnoreCase))
+                click = attribute.Value;
+            else if (attribute.Name.LocalName.Equals("data-codex-onchange", StringComparison.OrdinalIgnoreCase))
+                change = attribute.Value;
+            else if (attribute.Name.LocalName.Equals("data-codex-bind-value", StringComparison.OrdinalIgnoreCase))
+                bind = attribute.Value;
             else panel.Attributes[attribute.Name.LocalName] = attribute.Value;
         }
+
         var childIndex = 0;
         foreach (var child in element.Nodes())
         {
             AddNode(panel, child, runtime, components, $"{key}/{childIndex}", preservedInputs);
             if (child is XElement) childIndex++;
         }
+
         if (panel is TextInput inputValue)
         {
             if (preservedInputs.TryGetValue(key, out var previous))
@@ -530,12 +693,15 @@ internal static class HtmlPanelParser
             }
             else inputValue.SetValue(declaredValue ?? string.Empty);
         }
-        if (panel is Button button && click is not null) button.Clicked += e => RazorEventInvoker.Invoke(runtime, click, e);
+
+        if (panel is Button button && click is not null)
+            button.Clicked += e => RazorEventInvoker.Invoke(runtime, click, e);
         if (panel is TextInput textInput)
         {
             if (change is not null) textInput.ValueChanged += value => RazorEventInvoker.Invoke(runtime, change, value);
             if (bind is not null) textInput.ValueChanged += value => RazorEventInvoker.SetValue(runtime, bind, value);
         }
+
         parent.AddChild(panel);
     }
 }
@@ -545,13 +711,17 @@ internal static class RazorEventInvoker
     public static void Invoke(object target, string expression, object argument)
     {
         var invocation = RazorComponentFactory.CleanRazorExpression(expression);
-        if (invocation.Contains("=>", StringComparison.Ordinal)) invocation = invocation[(invocation.IndexOf("=>", StringComparison.Ordinal) + 2)..].Trim();
+        if (invocation.Contains("=>", StringComparison.Ordinal))
+            invocation = invocation[(invocation.IndexOf("=>", StringComparison.Ordinal) + 2)..].Trim();
         if (invocation.StartsWith("this.", StringComparison.Ordinal)) invocation = invocation[5..].Trim();
         var methodName = Regex.Match(invocation, @"^[A-Za-z_][A-Za-z0-9_]*").Value;
-        if (string.IsNullOrEmpty(methodName)) throw new InvalidOperationException($"Unsupported Razor event expression '{expression}'. Use a method or a method-call lambda.");
+        if (string.IsNullOrEmpty(methodName))
+            throw new InvalidOperationException(
+                $"Unsupported Razor event expression '{expression}'. Use a method or a method-call lambda.");
         var methods = target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .Where(m => m.Name.Equals(methodName, StringComparison.Ordinal)).ToList();
-        if (methods.Count == 0) throw new InvalidOperationException($"Razor event handler '{methodName}' was not found.");
+        if (methods.Count == 0)
+            throw new InvalidOperationException($"Razor event handler '{methodName}' was not found.");
         var method = methods.FirstOrDefault(m => m.GetParameters().Length == (argument is null ? 0 : 1)) ?? methods[0];
         var parameters = method.GetParameters();
         object?[] args = parameters.Length == 0 ? [] : [ConvertArgument(argument, parameters[0].ParameterType)];
@@ -564,10 +734,23 @@ internal static class RazorEventInvoker
     {
         memberName = RazorComponentFactory.CleanRazorExpression(memberName);
         var type = target.GetType();
-        var property = type.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        if (property?.CanWrite == true) { property.SetValue(target, value); if (target is PanelComponent c) c.StateHasChanged(); return; }
+        var property =
+            type.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property?.CanWrite == true)
+        {
+            property.SetValue(target, value);
+            if (target is PanelComponent c) c.StateHasChanged();
+            return;
+        }
+
         var field = type.GetField(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        if (field is not null) { field.SetValue(target, value); if (target is PanelComponent c) c.StateHasChanged(); return; }
+        if (field is not null)
+        {
+            field.SetValue(target, value);
+            if (target is PanelComponent c) c.StateHasChanged();
+            return;
+        }
+
         throw new InvalidOperationException($"Razor binding target '{memberName}' was not found or is read-only.");
     }
 

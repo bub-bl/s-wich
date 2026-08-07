@@ -1,5 +1,6 @@
 @inherits Crowbar.Engine.UI.RazorPanel
 @namespace Crowbar.Editor.Ui.Components
+@using Microsoft.AspNetCore.Components
 
 <div class="btn">
     <div class="title">My text: @Value</div>
@@ -7,6 +8,9 @@
 
 @code {
 
+    // The standard attribute exposes this property to Razor language services;
+    // the custom attribute keeps the native runtime parameter validation.
+    [Parameter]
     [Engine.UI.Parameter]
     public string Value { get; set; } = string.Empty;
 

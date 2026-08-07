@@ -24,5 +24,6 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
     <PackageReference Include="SkiaSharp" Version="4.150.1" />
     <PackageReference Include="Facebook.Yoga" Version="1.5.0-pre1" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>
