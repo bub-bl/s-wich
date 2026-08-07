@@ -39,6 +39,31 @@ public sealed partial class UiSystem : IDisposable
         RegisterRazorComponent(tagName, source, className, cssSource);
     }
 
+    /// <summary>
+    /// Discovers every .razor file under the given directory and registers it as
+    /// a reusable component keyed by file name (e.g. <c>MyButton.razor</c>
+    /// becomes the <c>&lt;MyButton&gt;</c> tag). Files whose name starts with an
+    /// underscore (such as <c>_Imports.razor</c>) are skipped.
+    /// </summary>
+    public int RegisterRazorComponentsFromDirectory(string directory, bool recursive = true)
+    {
+        directory = Path.GetFullPath(directory);
+        if (!Directory.Exists(directory)) return 0;
+        var options = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var registered = 0;
+        foreach (var razorPath in Directory.EnumerateFiles(directory, "*.razor", options))
+        {
+            var fileName = Path.GetFileName(razorPath);
+            if (fileName.StartsWith("_", StringComparison.Ordinal)) continue;
+            var className = Path.GetFileNameWithoutExtension(fileName);
+            if (_razorComponents.ContainsKey(className))
+                throw new InvalidOperationException($"Duplicate Razor component tag '{className}' found at '{razorPath}' (already registered).");
+            RegisterRazorComponentFromFile(className, razorPath, className);
+            registered++;
+        }
+        return registered;
+    }
+
     public void SetViewport(int width, int height) => Renderer.Resize(width, height);
 
     public void LoadRazorFromFile(string razorPath, string className = "Root")

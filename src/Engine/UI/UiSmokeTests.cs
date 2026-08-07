@@ -105,6 +105,38 @@ public static class UiSmokeTests
         TestReactiveRazor();
         TestRazorDirectivesAndLifecycle();
         TestScopedRazorCss();
+        TestAutoRegisteredComponents();
+    }
+
+    private static void TestAutoRegisteredComponents()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "CrowbarRazorComponents_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "AutoLabel.razor"), @"
+<div class=""auto-box""><span>@Label</span></div>
+@code {
+    [Crowbar.Engine.UI.Parameter] public string Label { get; set; } = string.Empty;
+}
+");
+            File.WriteAllText(Path.Combine(directory, "_Imports.razor"), "@inherits Crowbar.Engine.UI.RazorPanel");
+            using var ui = new UiSystem();
+            var registered = ui.RegisterRazorComponentsFromDirectory(directory);
+            if (registered != 1)
+                throw new InvalidOperationException($"Auto registration registered {registered} component(s) instead of 1 (underscore files must be skipped).");
+            ui.LoadRazor("<AutoLabel Label=\"auto resolved\" />", "AutoRoot");
+            ui.Screen.SetViewport(320, 120);
+            ui.Renderer.Resize(320, 120);
+            ui.Render();
+            var label = Find(ui.Screen, p => p.Text == "auto resolved");
+            if (label is null)
+                throw new InvalidOperationException("Auto-registered component was not resolved from markup.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static void TestScopedRazorCss()

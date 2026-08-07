@@ -22,8 +22,10 @@ internal static class Program
 
         WebGpuContext? webGpu = null;
         using var ui = new UiSystem();
-        // Enregistrement des composants Razor réutilisables
-        ui.RegisterRazorComponentFromFile("MyButton", ResolveUiFile("Components/MyButton.razor"), "MyButton");
+        // Enregistrement automatique des composants Razor réutilisables
+        var componentsDir = ResolveUiDirectory("Components");
+        var componentCount = ui.RegisterRazorComponentsFromDirectory(componentsDir);
+        Console.WriteLine($"Razor components: registered {componentCount} component(s) from {componentsDir}");
         
         var razorPath = ResolveUiFile("Demo.razor");
         Console.WriteLine($"Razor UI source: {razorPath}");
@@ -58,10 +60,14 @@ internal static class Program
         window.Run();
     }
 
-    private static string ResolveUiFile(string fileName)
+    private static string ResolveUiFile(string fileName) => ResolveUiPath(Path.Combine("Ui", fileName), File.Exists);
+
+    private static string ResolveUiDirectory(string directory) => ResolveUiPath(Path.Combine("Ui", directory), Directory.Exists);
+
+    private static string ResolveUiPath(string relativePath, Func<string, bool> sourceExists)
     {
-        var outputPath = Path.Combine(AppContext.BaseDirectory, "Ui", fileName);
-        var sourcePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Editor", "Ui", fileName));
-        return File.Exists(sourcePath) ? sourcePath : outputPath;
+        var outputPath = Path.Combine(AppContext.BaseDirectory, relativePath);
+        var sourcePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Editor", relativePath));
+        return sourceExists(sourcePath) ? sourcePath : outputPath;
     }
 }
