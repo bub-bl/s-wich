@@ -15,13 +15,16 @@ internal static class Program
             if (Environment.GetEnvironmentVariable("CROWBAR_UI_SMOKE_ONLY") == "1") return;
         }
         using IPlatform platform = new SdlPlatform();
-        using IWindow window = platform.CreateWindow(new WindowOptions(
+        using var window = platform.CreateWindow(new WindowOptions(
             Title: "Crowbar",
             Width: 1280,
             Height: 720));
 
         WebGpuContext? webGpu = null;
         using var ui = new UiSystem();
+        // Enregistrement des composants Razor réutilisables
+        ui.RegisterRazorComponentFromFile("MyButton", ResolveUiFile("Components/MyButton.razor"), "MyButton");
+        
         var razorPath = ResolveUiFile("Demo.razor");
         Console.WriteLine($"Razor UI source: {razorPath}");
         ui.LoadRazorFromFile(razorPath, "Demo");
@@ -33,13 +36,13 @@ internal static class Program
             else ui.ProcessPointerUp(e.X, e.Y, (int)e.Button);
         };
         window.PointerWheelChanged += e => ui.ProcessPointerWheel(e.X, e.Y, e.DeltaX, e.DeltaY);
-        window.KeyChanged += e => ui.ProcessKey(e);
+        window.KeyChanged += ui.ProcessKey;
 
         window.Loaded += () =>
         {
             Console.WriteLine("Crowbar platform initialized.");
-            int framebufferWidth = window.FramebufferWidth > 0 ? window.FramebufferWidth : window.Width;
-            int framebufferHeight = window.FramebufferHeight > 0 ? window.FramebufferHeight : window.Height;
+            var framebufferWidth = window.FramebufferWidth > 0 ? window.FramebufferWidth : window.Width;
+            var framebufferHeight = window.FramebufferHeight > 0 ? window.FramebufferHeight : window.Height;
             webGpu = new WebGpuContext(window.NativeHandle, framebufferWidth, framebufferHeight) { Ui = ui };
             ui.SetViewport(framebufferWidth, framebufferHeight);
             ui.Render();

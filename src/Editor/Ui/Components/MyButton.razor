@@ -1,6 +1,4 @@
 @inherits Crowbar.Engine.UI.RazorPanel
-@using System
-@using System.Text
 @namespace Crowbar.Editor.Ui.Components
 
 <div class="btn">
@@ -9,8 +7,9 @@
 
 @code {
 
+    [Engine.UI.Parameter]
     public string Value { get; set; } = string.Empty;
 
-    protected override int BuildHash() => HashCode.Combine(Text);
+    protected override int BuildHash() => HashCode.Combine(Value);
     
 }

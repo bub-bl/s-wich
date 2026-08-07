@@ -19,9 +19,9 @@
     <ProjectReference Include="..\Engine\Engine.csproj" />
     <Content Update="Ui\**\*.razor" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Ui\**\*.css" CopyToOutputDirectory="PreserveNewest" />
-    <None Update="Ui\Components\Button.razor.css">
+    <None Update="Ui\Components\MyButton.razor.css">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <DependentUpon>Button.razor</DependentUpon>
+      <DependentUpon>MyButton.razor</DependentUpon>
     </None>
   </ItemGroup>
 

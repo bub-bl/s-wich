@@ -368,6 +368,8 @@ internal static class HtmlPanelParser
             {
                 if (attribute.Name.LocalName.Equals("class", StringComparison.OrdinalIgnoreCase))
                     foreach (var value in attribute.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)) child.AddClass(value);
+                else if (attribute.Name.LocalName.StartsWith("data-codex-", StringComparison.OrdinalIgnoreCase))
+                    continue; // Skip synthetic event attributes – they are handled only on HTML elements
                 else child.SetParameter(attribute.Name.LocalName, attribute.Value);
             }
             var childTree = new RazorComponentFactory(components).BuildTree(child);
