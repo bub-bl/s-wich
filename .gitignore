@@ -1,4 +1,13 @@
+#IDE's
 .idea
+.vscode
+.vs
 
-bin
-obj
+#Agents
+.codex
+.claude
+.freebuff
+.build-local
+
+bin/
+obj/
