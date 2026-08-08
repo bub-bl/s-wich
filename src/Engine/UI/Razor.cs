@@ -86,6 +86,10 @@ public abstract class RazorPanel : PanelComponent, IComponent
     private readonly StringBuilder _output = new();
     private string _attributeSuffix = string.Empty;
     private readonly Dictionary<string, RazorPanel> _childComponents = new(StringComparer.Ordinal);
+    // Component tag (markup element name) each child was created for, so a key
+    // whose markup shifted to a different component (e.g. an @if inserts a
+    // sibling) is not handed a stale instance of the previous component type.
+    private readonly Dictionary<string, string> _childComponentTags = new(StringComparer.Ordinal);
     private readonly HashSet<string> _activeChildren = new(StringComparer.Ordinal);
     private bool _initialized;
 
@@ -223,12 +227,21 @@ public abstract class RazorPanel : PanelComponent, IComponent
     internal void NotifyRendered(bool firstRender) => OnAfterRender(firstRender);
     internal void BeginRenderPass() => _activeChildren.Clear();
 
-    internal RazorPanel GetOrCreateChild(string key, Func<RazorPanel> factory)
+    internal RazorPanel GetOrCreateChild(string key, string tag, Func<RazorPanel> factory)
     {
-        if (!_childComponents.TryGetValue(key, out var child))
+        // Child keys are positional, so the element occupying a key can change
+        // between renders (conditional siblings shift everything below them).
+        // Reusing an instance across a type change would apply the old
+        // component's parameters to the new component's markup (e.g. a
+        // Value attribute hitting a ChildContent-only component), so recreate
+        // whenever the tag no longer matches the one the child was built for.
+        if (!_childComponents.TryGetValue(key, out var child) ||
+            !_childComponentTags.TryGetValue(key, out var existingTag) ||
+            !existingTag.Equals(tag, StringComparison.OrdinalIgnoreCase))
         {
             child = factory();
             _childComponents[key] = child;
+            _childComponentTags[key] = tag;
         }
 
         _activeChildren.Add(key);
@@ -238,7 +251,10 @@ public abstract class RazorPanel : PanelComponent, IComponent
     internal void EndRenderPass()
     {
         foreach (var key in _childComponents.Keys.Where(key => !_activeChildren.Contains(key)).ToArray())
+        {
             _childComponents.Remove(key);
+            _childComponentTags.Remove(key);
+        }
     }
 
     internal void SetParameter(string name, string value)
@@ -779,7 +795,7 @@ internal static class HtmlPanelParser
         if (node is not XElement element) return;
         if (components is not null && components.TryGetValue(element.Name.LocalName, out var componentFactory))
         {
-            var child = runtime.GetOrCreateChild(key, componentFactory);
+            var child = runtime.GetOrCreateChild(key, element.Name.LocalName, componentFactory);
             child.StateChanged = runtime.StateHasChanged;
             child.NavigationRequested = runtime.NavigationRequested;
             foreach (var attribute in element.Attributes())

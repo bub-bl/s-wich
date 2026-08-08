@@ -112,6 +112,7 @@ public static class UiSmokeTests
         TestChildContentTransitions();
         TestMultipleFragments();
         TestMixedFragments();
+        TestChildComponentPositionShift();
     }
 
     private static void TestScopedHoverShorthand()
@@ -605,6 +606,66 @@ root { width: 99px; height: 99px; }
         var texts = CollectTexts(ui.Screen);
         if (texts.IndexOf("Head") >= texts.IndexOf("Middle") || texts.IndexOf("Middle") >= texts.IndexOf("Tail"))
             throw new InvalidOperationException("Fragments spliced in the parent's order instead of the component's order.");
+    }
+
+    private static void TestChildComponentPositionShift()
+    {
+        // Regression: child components are cached by positional key, so a
+        // conditional sibling (an @if block) shifting every key by one used to
+        // hand the component at a key a stale instance of the component that
+        // previously occupied it, throwing when a parameter did not exist on
+        // the recycled type (e.g. Value on a ChildContent-only component).
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("MyButton", @"
+<div class=""btn""><span>@Value</span></div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter] public string Value { get; set; } = string.Empty;
+    protected override int BuildHash() => HashCode.Combine(Value);
+}
+", "MyButton");
+        ui.RegisterRazorComponent("Card", @"
+<div class=""card""><div class=""inner"">@ChildContent</div></div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter]
+    public Microsoft.AspNetCore.Components.RenderFragment? ChildContent { get; set; }
+}
+", "Card");
+        ui.LoadRazor(@"
+<div class=""root"">
+    <button @onclick=""Toggle"">Toggle</button>
+    @if (show) { <label class=""extra"">Extra node</label> }
+    <MyButton Value=""first"" />
+    <MyButton Value=""second"" />
+    <MyButton Value=""third"" />
+    <Card><span class=""card-title"">Card content</span></Card>
+</div>
+@code {
+    private bool show = true;
+    private void Toggle() { show = !show; StateHasChanged(); }
+}
+", "PositionShiftDemo");
+        ui.Screen.SetViewport(640, 480);
+        ui.Renderer.Resize(640, 480);
+        ui.Render();
+
+        // Inserting the extra node (show=false -> true after the first toggle)
+        // shifts the MyButton/Card keys down by one; removing it shifts them
+        // back up. Neither transition may crash or mix up component instances.
+        foreach (var expected in new[] { true, false, true })
+        {
+            if ((Find(ui.Screen, p => p.Text == "Extra node") is null) == expected)
+                throw new InvalidOperationException("Position shift: conditional node visibility is wrong.");
+            if (Find(ui.Screen, p => p.Text == "first") is null || Find(ui.Screen, p => p.Text == "third") is null)
+                throw new InvalidOperationException("Position shift: parameterized component instance was lost.");
+            if (Find(ui.Screen, p => p.Text == "Card content") is null)
+                throw new InvalidOperationException("Position shift: child content component was lost.");
+            var button = Find(ui.Screen, p => p is Button);
+            if (button is null) throw new InvalidOperationException("Position shift: toggle button was not found.");
+            ui.ProcessPointerDown(button.Layout.X + 1, button.Layout.Y + 1);
+            ui.ProcessPointerUp(button.Layout.X + 1, button.Layout.Y + 1);
+            ui.Update();
+            ui.Render();
+        }
     }
 
     private static List<string> CollectTexts(Panel panel)
