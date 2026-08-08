@@ -2,7 +2,11 @@ using Facebook.Yoga;
 
 namespace Crowbar.UI;
 
-/// <summary>Small Yoga-compatible flex layout adapter. The tree is kept independent of the renderer.</summary>
+/// <summary>
+/// Small Yoga-compatible flex layout adapter backed by Yoga.Net (the maintained
+/// C# port of Meta's Yoga, namespace Facebook.Yoga). The tree is rebuilt on
+/// every pass and kept independent of the renderer.
+/// </summary>
 public sealed class YogaLayoutEngine
 {
     public int LayoutPasses { get; private set; }
@@ -11,10 +15,12 @@ public sealed class YogaLayoutEngine
     {
         LayoutPasses++;
         ApplyStyles(root, sheet, null);
-        var yogaRoot = BuildYogaTree(root, new YogaConfig());
-        yogaRoot.Width = root.ComputedStyle.Width ?? width;
-        yogaRoot.Height = root.ComputedStyle.Height ?? height;
-        yogaRoot.CalculateLayout();
+        var rootWidth = root.ComputedStyle.Width ?? width;
+        var rootHeight = root.ComputedStyle.Height ?? height;
+        var yogaRoot = BuildYogaTree(root);
+        yogaRoot.Style.SetDimension(Dimension.Width, StyleSizeLength.Points(rootWidth));
+        yogaRoot.Style.SetDimension(Dimension.Height, StyleSizeLength.Points(rootHeight));
+        LayoutAlgorithm.CalculateLayout(yogaRoot, rootWidth, rootHeight, Direction.LTR);
         ReadLayout(root, yogaRoot, 0, 0);
         root.ClearDirty();
     }
@@ -49,76 +55,102 @@ public sealed class YogaLayoutEngine
         foreach (var child in panel.Children) ApplyStyles(child, sheet, panel.ComputedStyle);
     }
 
-    private static YogaNode BuildYogaTree(Panel panel, YogaConfig config)
+    private static Node BuildYogaTree(Panel panel)
     {
         var style = panel.ComputedStyle;
-        var node = new YogaNode(config)
+        var node = new Node(Config.Default)
         {
-            FlexDirection = style.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase) ? YogaFlexDirection.Row : YogaFlexDirection.Column,
-            JustifyContent = ParseJustify(style.JustifyContent),
-            AlignItems = ParseAlign(style.AlignItems),
-            Display = style.Display.Equals("none", StringComparison.OrdinalIgnoreCase) || !panel.IsVisible ? YogaDisplay.None : YogaDisplay.Flex,
-            FlexGrow = style.FlexGrow,
-            Width = style.Width ?? YogaValue.Undefined(),
-            Height = style.Height ?? YogaValue.Undefined(),
-            MinWidth = style.MinWidth ?? YogaValue.Undefined(),
-            MaxWidth = style.MaxWidth ?? YogaValue.Undefined(),
-            MinHeight = style.MinHeight ?? YogaValue.Undefined(),
-            MaxHeight = style.MaxHeight ?? YogaValue.Undefined(),
-            PaddingTop = style.PaddingTop,
-            PaddingRight = style.PaddingRight,
-            PaddingBottom = style.PaddingBottom,
-            PaddingLeft = style.PaddingLeft,
-            MarginTop = style.MarginTop,
-            MarginRight = style.MarginRight,
-            MarginBottom = style.MarginBottom,
-            MarginLeft = style.MarginLeft,
-            Overflow = style.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ? YogaOverflow.Hidden : YogaOverflow.Visible,
+            Style =
+            {
+                FlexDirection = style.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase) ? FlexDirection.Row : FlexDirection.Column,
+                JustifyContent = ParseJustify(style.JustifyContent),
+                AlignItems = ParseAlign(style.AlignItems),
+                Display = style.Display.Equals("none", StringComparison.OrdinalIgnoreCase) || !panel.IsVisible ? Display.None : Display.Flex,
+                FlexGrow = new FloatOptional(style.FlexGrow),
+                Overflow = style.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ? Overflow.Hidden : Overflow.Visible,
+            }
         };
-        node.Data = panel;
+        node.SetContext(panel);
+
+        node.Style.SetDimension(Dimension.Width, ToSize(style.Width));
+        node.Style.SetDimension(Dimension.Height, ToSize(style.Height));
+        node.Style.SetMinDimension(Dimension.Width, ToSize(style.MinWidth));
+        node.Style.SetMaxDimension(Dimension.Width, ToSize(style.MaxWidth));
+        node.Style.SetMinDimension(Dimension.Height, ToSize(style.MinHeight));
+        node.Style.SetMaxDimension(Dimension.Height, ToSize(style.MaxHeight));
+
+        SetPadding(node, Edge.Top, style.PaddingTop);
+        SetPadding(node, Edge.Right, style.PaddingRight);
+        SetPadding(node, Edge.Bottom, style.PaddingBottom);
+        SetPadding(node, Edge.Left, style.PaddingLeft);
+        SetMargin(node, Edge.Top, style.MarginTop);
+        SetMargin(node, Edge.Right, style.MarginRight);
+        SetMargin(node, Edge.Bottom, style.MarginBottom);
+        SetMargin(node, Edge.Left, style.MarginLeft);
+
+        // Yoga.Net supports gap natively (Facebook.Yoga had to fake it through
+        // child margins), so the row/column gaps map straight to gutters.
+        if (style.ColumnGap != 0) node.Style.SetGap(Gutter.Column, StyleLength.Points(style.ColumnGap));
+        if (style.RowGap != 0) node.Style.SetGap(Gutter.Row, StyleLength.Points(style.RowGap));
+
         if ((panel.TagName.Equals("text", StringComparison.OrdinalIgnoreCase) || panel is TextInput) && !string.IsNullOrEmpty(panel is TextInput input ? input.Value : panel.Text))
         {
             var text = panel is TextInput inputValue ? inputValue.Value : panel.Text;
-            node.SetMeasureFunction((_, width, _, _, _) => new YogaSize
+            var fontSize = style.FontSize;
+            var lineHeight = style.LineHeight > 0 ? style.LineHeight : style.FontSize * 1.25f;
+            var paddingX = style.PaddingLeft + style.PaddingRight;
+            var paddingY = style.PaddingTop + style.PaddingBottom;
+            node.SetMeasureFunc((_, availableWidth, _, _, _) => new YGSize
             {
-                width = Math.Min(width > 0 ? width : float.MaxValue, text.Length * panel.ComputedStyle.FontSize * 0.56f + panel.ComputedStyle.PaddingLeft + panel.ComputedStyle.PaddingRight),
-                height = (panel.ComputedStyle.LineHeight > 0 ? panel.ComputedStyle.LineHeight : panel.ComputedStyle.FontSize * 1.25f) + panel.ComputedStyle.PaddingTop + panel.ComputedStyle.PaddingBottom
+                Width = Math.Min(availableWidth > 0 ? availableWidth : float.MaxValue, text.Length * fontSize * 0.56f + paddingX),
+                Height = lineHeight + paddingY
             });
         }
         for (var i = 0; i < panel.Children.Count; i++)
-            node.AddChild(BuildYogaTree(panel.Children[i], config, style, i));
-        return node;
-    }
-
-    private static YogaNode BuildYogaTree(Panel panel, YogaConfig config, ComputedStyle? parentStyle, int childIndex)
-    {
-        var node = BuildYogaTree(panel, config);
-        if (parentStyle is not null && childIndex > 0)
         {
-            if (parentStyle.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase)) node.MarginLeft = panel.ComputedStyle.MarginLeft + parentStyle.ColumnGap;
-            else node.MarginTop = panel.ComputedStyle.MarginTop + parentStyle.RowGap;
+            var child = BuildYogaTree(panel.Children[i]);
+            node.InsertChild(child, (nuint)i);
+            child.SetOwner(node);
         }
         return node;
     }
 
-    private static void ReadLayout(Panel panel, YogaNode node, float parentX, float parentY)
+    private static void ReadLayout(Panel panel, Node node, float parentX, float parentY)
     {
-        panel.Layout = new UiRect(parentX + node.LayoutX, parentY + node.LayoutY, node.LayoutWidth, node.LayoutHeight);
-        for (var i = 0; i < panel.Children.Count && i < node.Count; i++) ReadLayout(panel.Children[i], node[i], panel.Layout.X, panel.Layout.Y);
+        var layout = node.Layout;
+        panel.Layout = new UiRect(
+            parentX + layout.Position(PhysicalEdge.Left),
+            parentY + layout.Position(PhysicalEdge.Top),
+            layout.Dimension(Dimension.Width),
+            layout.Dimension(Dimension.Height));
+        for (var i = 0; i < panel.Children.Count && i < (int)node.GetChildCount(); i++)
+            ReadLayout(panel.Children[i], node.GetChild((nuint)i)!, panel.Layout.X, panel.Layout.Y);
     }
 
-    private static YogaAlign ParseAlign(string value) => value switch
+    private static StyleSizeLength ToSize(float? value) => value is float v ? StyleSizeLength.Points(v) : StyleSizeLength.Undefined();
+
+    private static void SetPadding(Node node, Edge edge, float value)
     {
-        "center" => YogaAlign.Center,
-        "flex-end" => YogaAlign.FlexEnd,
-        _ => YogaAlign.Stretch
+        if (value != 0) node.Style.SetPadding(edge, StyleLength.Points(value));
+    }
+
+    private static void SetMargin(Node node, Edge edge, float value)
+    {
+        if (value != 0) node.Style.SetMargin(edge, StyleLength.Points(value));
+    }
+
+    private static Align ParseAlign(string value) => value switch
+    {
+        "center" => Align.Center,
+        "flex-end" => Align.FlexEnd,
+        _ => Align.Stretch
     };
-    private static YogaJustify ParseJustify(string value) => value switch
+    private static Justify ParseJustify(string value) => value switch
     {
-        "center" => YogaJustify.Center,
-        "flex-end" => YogaJustify.FlexEnd,
-        "space-between" => YogaJustify.SpaceBetween,
-        "space-around" => YogaJustify.SpaceAround,
-        _ => YogaJustify.FlexStart
+        "center" => Justify.Center,
+        "flex-end" => Justify.FlexEnd,
+        "space-between" => Justify.SpaceBetween,
+        "space-around" => Justify.SpaceAround,
+        _ => Justify.FlexStart
     };
 }
