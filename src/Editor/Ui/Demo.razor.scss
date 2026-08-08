@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 root {
     width: 1280px;
     height: 720px;
@@ -15,25 +17,25 @@ root {
     height: 640px;
     margin: 32px;
     padding: 18px;
-    background-color: #18253aff;
+    background-color: $surface-card;
     border-radius: 12px;
 }
 
 .title {
     height: 32px;
-    color: #ffffffff;
+    color: $text;
 }
 
 .subtitle {
     height: 24px;
-    color: #9cc8ffff;
+    color: $text-secondary;
 }
 
 .separator {
     width: 480px;
     height: 1px;
     margin: 8px;
-    background-color: #466080ff;
+    background-color: $separator;
 }
 
 .row {
@@ -47,35 +49,35 @@ root {
 .action {
     width: 150px;
     height: 34px;
-    background-color: #3478d4ff;
+    background-color: $accent;
     border-radius: 6px;
-    color: #ffffffff;
+    color: $text;
     align-items: center;
     justify-content: center;
     text-align: center;
     vertical-align: center;
     line-height: 34px;
     transition: background-color 180ms ease;
-}
 
-.action:hover {
-    background-color: #4c9df0ff;
-}
+    &:hover {
+        background-color: $accent-hover;
+    }
 
-.action:active {
-    background-color: #245da8ff;
+    &:active {
+        background-color: $accent-active;
+    }
 }
 
 .status {
     width: 280px;
     height: 24px;
-    color: #7ee0a5ff;
+    color: $text-success;
 }
 
 .field-label {
     width: 480px;
     height: 20px;
-    color: #9cc8ffff;
+    color: $text-secondary;
     font-size: 12px;
 }
 
@@ -83,46 +85,46 @@ root {
     width: 480px;
     height: 34px;
     padding: 0 12px;
-    background-color: #0d1420ff;
+    background-color: $surface-deep;
     border-radius: 5px;
-    color: #ffffffff;
+    color: $text;
     text-align: left;
     vertical-align: center;
     line-height: 34px;
     box-sizing: border-box;
-}
 
-.field:focus {
-    background-color: #172840ff;
-}
+    &:focus {
+        background-color: $surface-focus;
+    }
 
-.field:disabled {
-    opacity: 0.55;
+    &:disabled {
+        opacity: 0.55;
+    }
 }
 
 .footer {
     width: 480px;
     height: 22px;
-    color: #71829bff;
+    color: $text-muted;
     font-size: 12px;
 }
 
 .panel-heading {
     width: 456px;
     height: 20px;
-    color: #ffffffff;
+    color: $text;
     font-size: 12px;
 }
 
 .panel-line {
     width: 456px;
     height: 20px;
-    color: #9cc8ffff;
+    color: $text-secondary;
     font-size: 12px;
 }
 
 .panel-foot {
-    color: #7ee0a5ff;
+    color: $text-success;
 }
 
 .scroll-demo {
@@ -134,7 +136,7 @@ root {
 .demo-title {
     width: 360px;
     height: 24px;
-    color: #9cc8ffff;
+    color: $text-secondary;
     font-size: 13px;
 }
 
@@ -142,10 +144,10 @@ root {
     width: 360px;
     height: 240px;
     overflow: auto;
-    background-color: #0d1420ff;
+    background-color: $surface-deep;
     border-radius: 6px;
-    /* Scrollbars are styled per element through CSS. */
-    scrollbar-color: #9cc8ffff #1b2a3aff;
+    // Les scrollbars sont stylées par élément via le CSS.
+    scrollbar-color: $scrollbar-thumb $scrollbar-track;
     scrollbar-width: 8px;
     scrollbar-radius: 4px;
 }
@@ -155,7 +157,7 @@ root {
     height: 26px;
     flex-shrink: 0;
     padding-left: 10px;
-    color: #d7e3f4ff;
+    color: $text-list;
     font-size: 12px;
     box-sizing: border-box;
 }
@@ -163,7 +165,7 @@ root {
 .hint {
     width: 360px;
     height: 20px;
-    color: #71829bff;
+    color: $text-muted;
     font-size: 11px;
 }
 
@@ -171,7 +173,7 @@ root {
     width: 360px;
     height: 60px;
     overflow: hidden;
-    background-color: #0d1420ff;
+    background-color: $surface-deep;
     border-radius: 6px;
 }
 
@@ -180,9 +182,9 @@ root {
     height: 40px;
     margin: 10px;
     padding-left: 10px;
-    background-color: #b3541eff;
+    background-color: $danger;
     border-radius: 4px;
-    color: #ffffffff;
+    color: $text;
     font-size: 12px;
     box-sizing: border-box;
 }

@@ -1,3 +1,5 @@
+@use '../variables' as *;
+
 root {
     width: 504px;
 }
@@ -5,6 +7,6 @@ root {
 .card-box {
     width: 504px;
     padding: 12px;
-    background-color: #1b2942ff;
+    background-color: $surface-raised;
     border-radius: 10px;
 }

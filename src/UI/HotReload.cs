@@ -42,8 +42,10 @@ public sealed partial class UiSystem
         _lastStyleWriteUtc = _stylePath is null ? DateTime.MinValue : GetWriteTime(_stylePath);
     }
 
-    /// <summary>Watches every .razor / .razor.css file under <paramref name="directory"/>.
-    /// On change the components are re-registered and the current page is reloaded.</summary>
+    /// <summary>Watches every .razor / .razor.css / .razor.scss file under <paramref name="directory"/>.
+    /// On change the components are re-registered and the current page is reloaded.
+    /// Style sources are .razor.scss files compiled to .razor.css by DartSassBuilder
+    /// at build time, so a style edit takes effect once the project is rebuilt.</summary>
     public void WatchDirectory(string directory)
     {
         StopWatching();

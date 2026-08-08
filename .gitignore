@@ -12,5 +12,8 @@
 bin/
 obj/
 
+# CSS généré par DartSassBuilder à partir des sources .scss
+src/Editor/Ui/**/*.css
+
 .log
 .sln.DotSettings.user

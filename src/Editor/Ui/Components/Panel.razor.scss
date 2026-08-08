@@ -1,17 +1,19 @@
+@use '../variables' as *;
+
 root {
     width: 480px;
 }
 
 .panel {
     width: 480px;
-    background-color: #0d1524ff;
+    background-color: $surface;
     border-radius: 10px;
 }
 
 .panel-header {
     width: 480px;
     padding: 10px 12px;
-    background-color: #1b2942ff;
+    background-color: $surface-raised;
 }
 
 .panel-body {
@@ -22,5 +24,5 @@ root {
 .panel-footer {
     width: 480px;
     padding: 10px 12px;
-    background-color: #1b2942ff;
+    background-color: $surface-raised;
 }
