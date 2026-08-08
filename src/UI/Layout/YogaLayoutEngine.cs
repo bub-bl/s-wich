@@ -185,21 +185,24 @@ public sealed class YogaLayoutEngine
         // Yoga resolves every length (including percentages) during layout;
         // the renderer consumes these resolved values instead of re-deriving
         // them from the computed style.
+        // UiThickness stores (Top, Right, Bottom, Left) — keep the edges in
+        // that order (a previous swap pushed text 12px down on asymmetric
+        // paddings like `padding: 0 12px`).
         panel.LayoutPadding = new UiThickness(
-            layout.Padding(PhysicalEdge.Left),
             layout.Padding(PhysicalEdge.Top),
             layout.Padding(PhysicalEdge.Right),
-            layout.Padding(PhysicalEdge.Bottom));
+            layout.Padding(PhysicalEdge.Bottom),
+            layout.Padding(PhysicalEdge.Left));
         panel.LayoutBorder = new UiThickness(
-            layout.Border(PhysicalEdge.Left),
             layout.Border(PhysicalEdge.Top),
             layout.Border(PhysicalEdge.Right),
-            layout.Border(PhysicalEdge.Bottom));
+            layout.Border(PhysicalEdge.Bottom),
+            layout.Border(PhysicalEdge.Left));
         panel.LayoutMargin = new UiThickness(
-            layout.Margin(PhysicalEdge.Left),
             layout.Margin(PhysicalEdge.Top),
             layout.Margin(PhysicalEdge.Right),
-            layout.Margin(PhysicalEdge.Bottom));
+            layout.Margin(PhysicalEdge.Bottom),
+            layout.Margin(PhysicalEdge.Left));
         for (var i = 0; i < panel.Children.Count && i < (int)node.GetChildCount(); i++)
             ReadLayout(panel.Children[i], node.GetChild((nuint)i)!, panel.Layout.X, panel.Layout.Y);
     }

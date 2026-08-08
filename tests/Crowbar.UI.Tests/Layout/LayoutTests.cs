@@ -251,12 +251,29 @@ public class LayoutTests
         child.AddClass("box");
         root.AddChild(child);
 
-        Layout(root, 320, 200, ".box { width: 200px; height: 40px; padding: 10%; }");
+        Layout(root, 320, 200, ".box { width: 200px; height: 40px; padding: 10% 5%; }");
 
-        // Percent padding resolves against the parent width (320), and Yoga
-        // exposes the resolved value for the renderer.
-        Assert.Equal(32, child.LayoutPadding.Left);
-        Assert.Equal(32, child.LayoutPadding.Top);
+        // Percent padding resolves against the parent width (320): 10% vertical
+        // = 32, 5% horizontal = 16. Yoga exposes the resolved values for the
+        // renderer, kept in (top, right, bottom, left) order.
+        Assert.Equal(new UiThickness(32, 16, 32, 16), child.LayoutPadding);
+    }
+
+    [Fact]
+    public void ResolvedBoxEdgesKeepTheirOrdering()
+    {
+        var root = new ScreenPanel();
+        var child = new Panel { TagName = "div" };
+        child.AddClass("box");
+        root.AddChild(child);
+
+        Layout(root, 320, 200, ".box { width: 100px; height: 40px; padding: 1px 2px 3px 4px; margin: 5px 6px 7px 8px; border: 9px solid #000000; }");
+
+        // Each side must land on its own edge: a swapped mapping once pushed
+        // text 12px down for asymmetric values like `padding: 0 12px`.
+        Assert.Equal(new UiThickness(1, 2, 3, 4), child.LayoutPadding);
+        Assert.Equal(new UiThickness(5, 6, 7, 8), child.LayoutMargin);
+        Assert.Equal(new UiThickness(9, 9, 9, 9), child.LayoutBorder);
     }
 
     [Fact]
@@ -401,7 +418,7 @@ public class LayoutTests
         Layout(root, 320, 200, ".box { width: 100px; height: 40px; border: 4px solid #000000; }");
 
         Assert.Equal(100, child.Layout.Width);
-        Assert.Equal(4, child.LayoutBorder.Left);
-        Assert.Equal(0, child.LayoutPadding.Left);
+        Assert.Equal(new UiThickness(4, 4, 4, 4), child.LayoutBorder);
+        Assert.Equal(new UiThickness(0, 0, 0, 0), child.LayoutPadding);
     }
 }
