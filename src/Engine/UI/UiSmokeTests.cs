@@ -105,12 +105,59 @@ public static class UiSmokeTests
         TestReactiveRazor();
         TestRazorDirectivesAndLifecycle();
         TestScopedRazorCss();
+        TestScopedHoverShorthand();
         TestAutoRegisteredComponents();
         TestRazorRouting();
         TestChildContent();
         TestChildContentTransitions();
         TestMultipleFragments();
         TestMixedFragments();
+    }
+
+    private static void TestScopedHoverShorthand()
+    {
+        // Pseudo-class rules on a component with #RGB shorthand colors: the
+        // scoped :hover rule must match AND its color must be applied (regression
+        // for MyButton, whose `.btn:hover { background-color: #333 }` was silently
+        // dropped because UiColor only accepted #RRGGBB/#RRGGBBAA).
+        using var ui = new UiSystem();
+        ui.RegisterRazorComponent("HoverBtn", @"
+<div class=""btn""><div class=""title"">@Label</div></div>
+@code {
+    [Microsoft.AspNetCore.Components.Parameter] public string Label { get; set; } = string.Empty;
+}
+", "HoverBtn", cssSource: @"
+root { width: 300px; height: 40px; }
+.btn { width: 300px; height: 40px; background-color: black; }
+.btn:hover { background-color: #333; }
+.title { color: #333; }
+");
+        ui.LoadRazor(@"
+<div class=""root""><HoverBtn Label=""hi"" /></div>
+", "HoverShorthandDemo");
+        ui.Screen.SetViewport(640, 200);
+        ui.Renderer.Resize(640, 200);
+        ui.Render();
+
+        var btn = Find(ui.Screen, p => p.Classes.Contains("btn"));
+        var title = Find(ui.Screen, p => p.Classes.Contains("title"));
+        if (btn is null || title is null) throw new InvalidOperationException("Hover shorthand test markup failed.");
+        if (btn.ComputedStyle.BackgroundColor != new UiColor(0, 0, 0, 255))
+            throw new InvalidOperationException($"Hover shorthand base color was not applied (bg={btn.ComputedStyle.BackgroundColor}).");
+        if (title.ComputedStyle.Color != new UiColor(51, 51, 51, 255))
+            throw new InvalidOperationException($"#RGB color shorthand was not parsed for text (color={title.ComputedStyle.Color}).");
+
+        ui.ProcessPointerMove(btn.Layout.X + btn.Layout.Width / 2, btn.Layout.Y + btn.Layout.Height / 2);
+        ui.Render();
+        if (!btn.IsHovered)
+            throw new InvalidOperationException("Hover state was not routed to the component panel.");
+        if (btn.ComputedStyle.BackgroundColor != new UiColor(51, 51, 51, 255))
+            throw new InvalidOperationException($"Scoped :hover rule did not change the component background (bg={btn.ComputedStyle.BackgroundColor}).");
+
+        ui.ProcessPointerMove(639, 199);
+        ui.Render();
+        if (btn.ComputedStyle.BackgroundColor != new UiColor(0, 0, 0, 255))
+            throw new InvalidOperationException("Component background did not restore after hover exit.");
     }
 
     private static void TestAutoRegisteredComponents()

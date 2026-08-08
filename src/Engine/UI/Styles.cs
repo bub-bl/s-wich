@@ -55,14 +55,19 @@ public readonly record struct UiColor(byte R, byte G, byte B, byte A)
     public static bool TryParse(string value, out UiColor color)
     {
         value = value.Trim();
-        if (value.Equals("transparent", StringComparison.OrdinalIgnoreCase)) { color = Transparent; return true; }
-        if (value.Equals("white", StringComparison.OrdinalIgnoreCase)) { color = White; return true; }
-        if (value.Equals("black", StringComparison.OrdinalIgnoreCase)) { color = Black; return true; }
-        if (value.StartsWith('#') && (value.Length == 7 || value.Length == 9))
+        if (NamedColors.TryGetValue(value, out color)) return true;
+        if (value.StartsWith('#'))
         {
-            if (uint.TryParse(value[1..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var n))
+            var hex = value[1..];
+            // #RGB / #RGBA shorthand: each digit is doubled (#333 -> #333333).
+            if (hex.Length is 3 or 4)
             {
-                if (value.Length == 7) color = new((byte)(n >> 16), (byte)(n >> 8), (byte)n, 255);
+                hex = string.Concat(hex.SelectMany(c => new[] { c, c }));
+            }
+            if (hex.Length is 6 or 8 &&
+                uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var n))
+            {
+                if (hex.Length == 6) color = new((byte)(n >> 16), (byte)(n >> 8), (byte)n, 255);
                 else color = new((byte)(n >> 24), (byte)(n >> 16), (byte)(n >> 8), (byte)n);
                 return true;
             }
@@ -80,6 +85,32 @@ public readonly record struct UiColor(byte R, byte G, byte B, byte A)
         }
         color = default; return false;
     }
+
+    private static readonly Dictionary<string, UiColor> NamedColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["transparent"] = Transparent,
+        ["white"] = White,
+        ["black"] = Black,
+        ["red"] = new(255, 0, 0, 255),
+        ["green"] = new(0, 128, 0, 255),
+        ["lime"] = new(0, 255, 0, 255),
+        ["blue"] = new(0, 0, 255, 255),
+        ["navy"] = new(0, 0, 128, 255),
+        ["yellow"] = new(255, 255, 0, 255),
+        ["orange"] = new(255, 165, 0, 255),
+        ["purple"] = new(128, 0, 128, 255),
+        ["magenta"] = new(255, 0, 255, 255),
+        ["cyan"] = new(0, 255, 255, 255),
+        ["teal"] = new(0, 128, 128, 255),
+        ["gray"] = new(128, 128, 128, 255),
+        ["grey"] = new(128, 128, 128, 255),
+        ["silver"] = new(192, 192, 192, 255),
+        ["maroon"] = new(128, 0, 0, 255),
+        ["olive"] = new(128, 128, 0, 255),
+        ["pink"] = new(255, 192, 203, 255),
+        ["brown"] = new(165, 42, 42, 255),
+        ["gold"] = new(255, 215, 0, 255)
+    };
 }
 
 public sealed record StyleRule(string Selector, IReadOnlyDictionary<string, string> Properties, int Order)
