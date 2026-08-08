@@ -3,9 +3,16 @@ root {
     height: 720px;
 }
 
+.page {
+    width: 1280px;
+    height: 720px;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
 .card {
     width: 520px;
-    height: 620px;
+    height: 640px;
     margin: 32px;
     padding: 18px;
     background-color: #18253aff;
@@ -116,4 +123,66 @@ root {
 
 .panel-foot {
     color: #7ee0a5ff;
+}
+
+.scroll-demo {
+    width: 380px;
+    margin: 32px;
+    gap: 8px;
+}
+
+.demo-title {
+    width: 360px;
+    height: 24px;
+    color: #9cc8ffff;
+    font-size: 13px;
+}
+
+.scroll-area {
+    width: 360px;
+    height: 240px;
+    overflow: auto;
+    background-color: #0d1420ff;
+    border-radius: 6px;
+    /* Scrollbars are styled per element through CSS. */
+    scrollbar-color: #9cc8ffff #1b2a3aff;
+    scrollbar-width: 8px;
+    scrollbar-radius: 4px;
+}
+
+.scroll-line {
+    width: 360px;
+    height: 26px;
+    flex-shrink: 0;
+    padding-left: 10px;
+    color: #d7e3f4ff;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+.hint {
+    width: 360px;
+    height: 20px;
+    color: #71829bff;
+    font-size: 11px;
+}
+
+.clip-demo {
+    width: 360px;
+    height: 60px;
+    overflow: hidden;
+    background-color: #0d1420ff;
+    border-radius: 6px;
+}
+
+.clip-wide {
+    width: 560px;
+    height: 40px;
+    margin: 10px;
+    padding-left: 10px;
+    background-color: #b3541eff;
+    border-radius: 4px;
+    color: #ffffffff;
+    font-size: 12px;
+    box-sizing: border-box;
 }

@@ -205,6 +205,35 @@ public sealed class YogaLayoutEngine
             layout.Margin(PhysicalEdge.Left));
         for (var i = 0; i < panel.Children.Count && i < (int)node.GetChildCount(); i++)
             ReadLayout(panel.Children[i], node.GetChild((nuint)i)!, panel.Layout.X, panel.Layout.Y);
+        ComputeScrollRange(panel);
+    }
+
+    /// <summary>
+    /// Computes the scrollable range of a panel from the laid-out bounds of its
+    /// children (including their margins, as CSS does). Content starts at the
+    /// padding-box origin; anything extending past the client box is scrollable.
+    /// </summary>
+    private static void ComputeScrollRange(Panel panel)
+    {
+        panel.MaxScrollX = 0;
+        panel.MaxScrollY = 0;
+        if (panel.Children.Count == 0) return;
+        var contentRight = 0f;
+        var contentBottom = 0f;
+        foreach (var child in panel.Children)
+        {
+            contentRight = Math.Max(contentRight, child.Layout.Right + child.LayoutMargin.Right - panel.Layout.X);
+            contentBottom = Math.Max(contentBottom, child.Layout.Bottom + child.LayoutMargin.Bottom - panel.Layout.Y);
+        }
+        var clientLeft = panel.LayoutPadding.Left + panel.LayoutBorder.Left;
+        var clientTop = panel.LayoutPadding.Top + panel.LayoutBorder.Top;
+        var contentWidth = Math.Max(0, contentRight - clientLeft);
+        var contentHeight = Math.Max(0, contentBottom - clientTop);
+        panel.MaxScrollX = Math.Max(0, contentWidth - panel.ClientWidth);
+        panel.MaxScrollY = Math.Max(0, contentHeight - panel.ClientHeight);
+        // Keep the current offset valid when the content shrank. ScrollTo is a
+        // no-op (no invalidation) when the offset is already in range.
+        panel.ScrollTo(panel.ScrollX, panel.ScrollY);
     }
 
     private static void SetMargin(Node node, Edge edge, CssLength value)

@@ -63,6 +63,13 @@ public sealed class ComputedStyle
     public CssLength PositionBottom { get; set; }
     public CssLength PositionLeft { get; set; }
 
+    /// <summary>Scrollbar thickness in px; 0 means <c>auto</c> (the engine default).</summary>
+    public float ScrollbarWidth { get; set; }
+    /// <summary>Corner radius of the scrollbar track and thumb, in px.</summary>
+    public float ScrollbarRadius { get; set; } = 5;
+    public UiColor ScrollbarThumbColor { get; set; } = new(150, 172, 205, 215);
+    public UiColor ScrollbarTrackColor { get; set; } = new(15, 24, 40, 110);
+
     public float Opacity { get; set; } = 1;
     public float BorderRadius { get; set; }
     public float FontSize { get; set; } = 16;

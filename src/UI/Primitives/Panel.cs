@@ -39,12 +39,49 @@ public class Panel
     public bool HasScope(string scopeId) => !string.IsNullOrEmpty(scopeId) && _scopeIds.Contains(scopeId);
     public ComputedStyle ComputedStyle { get; internal set; } = new();
     public UiRect Layout { get; internal set; }
+    /// <summary>Horizontal scroll offset of the content box, in layout units.</summary>
+    public float ScrollX { get; private set; }
+    /// <summary>Vertical scroll offset of the content box, in layout units.</summary>
+    public float ScrollY { get; private set; }
+    /// <summary>Maximum horizontal scroll offset, set by the layout pass from the overflowing children.</summary>
+    public float MaxScrollX { get; internal set; }
+    /// <summary>Maximum vertical scroll offset, set by the layout pass from the overflowing children.</summary>
+    public float MaxScrollY { get; internal set; }
     /// <summary>Resolved padding of the last layout pass (percentages included).</summary>
     public UiThickness LayoutPadding { get; internal set; }
     /// <summary>Resolved border width of the last layout pass.</summary>
     public UiThickness LayoutBorder { get; internal set; }
     /// <summary>Resolved margin of the last layout pass.</summary>
     public UiThickness LayoutMargin { get; internal set; }
+    /// <summary>The computed <c>overflow</c> keyword (visible, hidden, scroll, auto, clip).</summary>
+    public string Overflow => ComputedStyle.Overflow;
+    /// <summary>Scrollbar thickness in px (<c>auto</c> falls back to <see cref="ScrollBars.Thickness"/>).</summary>
+    public float ScrollbarThickness => ComputedStyle.ScrollbarWidth > 0 ? ComputedStyle.ScrollbarWidth : ScrollBars.Thickness;
+    /// <summary>True when children are clipped to the padding box (hidden, scroll, auto, clip).</summary>
+    public bool ClipsContent => Overflow is "hidden" or "scroll" or "auto" or "clip";
+    /// <summary>True when the panel can be scrolled by the user (scroll or auto).</summary>
+    public bool IsScrollContainer => Overflow is "scroll" or "auto";
+    public bool CanScrollHorizontally => IsScrollContainer && MaxScrollX > 0;
+    public bool CanScrollVertically => IsScrollContainer && MaxScrollY > 0;
+    /// <summary>Resolved content-box width of the last layout pass.</summary>
+    public float ClientWidth => Math.Max(0, Layout.Width - LayoutPadding.Left - LayoutPadding.Right - LayoutBorder.Left - LayoutBorder.Right);
+    /// <summary>Resolved content-box height of the last layout pass.</summary>
+    public float ClientHeight => Math.Max(0, Layout.Height - LayoutPadding.Top - LayoutPadding.Bottom - LayoutBorder.Top - LayoutBorder.Bottom);
+
+    /// <summary>Sets the scroll offset, clamped to the scrollable range. No-op when unchanged.</summary>
+    public void ScrollTo(float x, float y)
+    {
+        var nextX = Math.Clamp(x, 0, Math.Max(0, MaxScrollX));
+        var nextY = Math.Clamp(y, 0, Math.Max(0, MaxScrollY));
+        if (Math.Abs(nextX - ScrollX) < 0.001f && Math.Abs(nextY - ScrollY) < 0.001f) return;
+        ScrollX = nextX;
+        ScrollY = nextY;
+        Invalidate();
+    }
+
+    /// <summary>Scrolls by the given delta, clamped to the scrollable range.</summary>
+    public void ScrollBy(float dx, float dy) => ScrollTo(ScrollX + dx, ScrollY + dy);
+
     public bool IsVisible { get; set; } = true;
     public bool IsEnabled { get => _isEnabled; set { if (_isEnabled != value) { _isEnabled = value; Invalidate(); } } }
     public bool IsChecked { get => _isChecked; set { if (_isChecked != value) { _isChecked = value; Invalidate(); } } }

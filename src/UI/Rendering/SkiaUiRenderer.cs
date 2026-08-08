@@ -56,15 +56,53 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
         // An empty focused input still needs a text pass so its caret can be
         // drawn at the beginning of the field.
         if (!string.IsNullOrEmpty(text) || panel is TextInput { IsFocused: true }) DrawText(canvas, panel, rect, text, alpha);
-        if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ||
-            panel.ComputedStyle.Overflow.Equals("scroll", StringComparison.OrdinalIgnoreCase))
+        // Children are drawn at the scrolled position (content coordinates minus
+        // the scroll offset) and clipped to the padding box when the panel clips
+        // its content (overflow hidden/scroll/auto/clip).
+        if (panel.ClipsContent)
         {
             canvas.Save();
-            canvas.ClipRect(rect);
-            foreach (var child in panel.Children) DrawPanel(canvas, child, ox, oy, opacity);
+            var clip = new SKRect(
+                rect.Left + panel.LayoutBorder.Left,
+                rect.Top + panel.LayoutBorder.Top,
+                rect.Right - panel.LayoutBorder.Right,
+                rect.Bottom - panel.LayoutBorder.Bottom);
+            canvas.ClipRect(clip);
+            foreach (var child in panel.Children) DrawPanel(canvas, child, ox - panel.ScrollX, oy - panel.ScrollY, opacity);
             canvas.Restore();
         }
-        else foreach (var child in panel.Children) DrawPanel(canvas, child, ox, oy, opacity);
+        else foreach (var child in panel.Children) DrawPanel(canvas, child, ox - panel.ScrollX, oy - panel.ScrollY, opacity);
+        // Scrollbars overlay the content edge and stay visible regardless of the
+        // scroll position, so they are drawn after restoring the clip.
+        DrawScrollBars(canvas, panel, ox, oy);
+    }
+
+    private static void DrawScrollBars(SKCanvas canvas, Panel panel, float ox, float oy)
+    {
+        // Scrollbar look is customizable per element through CSS
+        // (scrollbar-color/width/radius); the values flow from ComputedStyle.
+        var style = panel.ComputedStyle;
+        var radius = Math.Min(style.ScrollbarRadius, panel.ScrollbarThickness / 2f);
+        var trackColor = new SKColor(style.ScrollbarTrackColor.R, style.ScrollbarTrackColor.G, style.ScrollbarTrackColor.B, style.ScrollbarTrackColor.A);
+        var thumbColor = new SKColor(style.ScrollbarThumbColor.R, style.ScrollbarThumbColor.G, style.ScrollbarThumbColor.B, style.ScrollbarThumbColor.A);
+        if (ScrollBars.ShouldShowVertical(panel))
+        {
+            var track = ScrollBars.VerticalTrack(panel);
+            using var trackPaint = new SKPaint { Color = trackColor, IsAntialias = true };
+            canvas.DrawRoundRect(track.X + ox, track.Y + oy, track.Width, track.Height, radius, radius, trackPaint);
+            var thumb = ScrollBars.VerticalThumb(panel);
+            using var thumbPaint = new SKPaint { Color = thumbColor, IsAntialias = true };
+            canvas.DrawRoundRect(thumb.X + ox, thumb.Y + oy, thumb.Width, thumb.Height, radius, radius, thumbPaint);
+        }
+        if (ScrollBars.ShouldShowHorizontal(panel))
+        {
+            var track = ScrollBars.HorizontalTrack(panel);
+            using var trackPaint = new SKPaint { Color = trackColor, IsAntialias = true };
+            canvas.DrawRoundRect(track.X + ox, track.Y + oy, track.Width, track.Height, radius, radius, trackPaint);
+            var thumb = ScrollBars.HorizontalThumb(panel);
+            using var thumbPaint = new SKPaint { Color = thumbColor, IsAntialias = true };
+            canvas.DrawRoundRect(thumb.X + ox, thumb.Y + oy, thumb.Width, thumb.Height, radius, radius, thumbPaint);
+        }
     }
 
     private static void DrawText(SKCanvas canvas, Panel panel, SKRect rect, string text, byte alpha)

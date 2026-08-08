@@ -196,14 +196,40 @@ public class Image : Panel
 
 public static class PanelExtensions
 {
+    /// <summary>
+    /// Depth-first hit test that mirrors how the renderer draws: children of a
+    /// clipped panel (overflow hidden/scroll/auto/clip) are only hit inside the
+    /// padding box, children of a scrollable panel are tested at the scrolled
+    /// position, and visible scrollbars claim their zone so the container can
+    /// be dragged. Children of an overflow:visible panel may be hit even when
+    /// the pointer lies outside the panel itself.
+    /// </summary>
     public static Panel? HitTest(this Panel panel, float x, float y)
     {
-        if (!panel.IsVisible || x < panel.Layout.X || y < panel.Layout.Y || x > panel.Layout.Right || y > panel.Layout.Bottom) return null;
+        if (!panel.IsVisible) return null;
+        var inside = x >= panel.Layout.X && x <= panel.Layout.Right && y >= panel.Layout.Y && y <= panel.Layout.Bottom;
+
+        // A visible scrollbar owns its zone: report the container so the input
+        // system can start a drag instead of leaking through to a child.
+        if (inside && ScrollBars.HitTest(panel, x, y)) return panel;
+
+        if (panel.ClipsContent)
+        {
+            if (!inside) return null;
+            // Outside the padding box (border area): only the container itself.
+            var border = panel.LayoutBorder;
+            if (x < panel.Layout.X + border.Left || x > panel.Layout.Right - border.Right ||
+                y < panel.Layout.Y + border.Top || y > panel.Layout.Bottom - border.Bottom)
+                return panel;
+        }
+
         for (var i = panel.Children.Count - 1; i >= 0; i--)
         {
-            var hit = panel.Children[i].HitTest(x, y);
+            // Children live in content coordinates: the pointer is translated by
+            // the scroll offset before recursing, exactly like the renderer.
+            var hit = panel.Children[i].HitTest(x + panel.ScrollX, y + panel.ScrollY);
             if (hit is not null) return hit;
         }
-        return panel;
+        return inside ? panel : null;
     }
 }

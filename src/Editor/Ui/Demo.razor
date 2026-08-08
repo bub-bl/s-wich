@@ -7,52 +7,68 @@
 
 @{ var pipelineLabel = new StringBuilder("Rendered by RazorPanel + Skia").ToString(); }
 
-<div class="card">
-    <div class="title">Crowbar Razor UI</div>
-    <div class="subtitle">Razor + Yoga + Skia + WebGPU</div>
+<div class="page">
+    <div class="card">
+        <div class="title">Crowbar Razor UI</div>
+        <div class="subtitle">Razor + Yoga + Skia + WebGPU</div>
 
-    <div class="separator"></div>
+        <div class="separator"></div>
 
-    <div class="row">
-        <button class="action" @onclick="@Increment">CLICKED @_count TIMES</button>
-        <div class="status">SCREEN PANEL ACTIVE · RENDER @_renderCount</div>
+        <div class="row">
+            <button class="action" @onclick="Increment">CLICKED @_count TIMES</button>
+            <div class="status">SCREEN PANEL ACTIVE · RENDER @_renderCount</div>
+        </div>
+
+        @if (_count > 0)
+        {
+            <div class="status">LAST ACTION REGISTERED</div>
+        }
+
+        <MyButton Value="Salut mec"></MyButton>
+        <MyButton Value="Salut mec"></MyButton>
+
+        <Card>
+            <div class="field-label">INPUT FIELD (ChildContent)</div>
+            <input class="field" value="@_name" @bind-value="_name"/>
+            <div class="status">@_name</div>
+        </Card>
+
+        <Panel>
+            <Header>
+                <div class="panel-heading">PANEL — MULTIPLE RENDERFRAGMENTS</div>
+            </Header>
+            <Body>
+                <div class="panel-line">Body fragment · @_name</div>
+                <div class="panel-line">Header, Body and Footer are separate RenderFragment parameters</div>
+            </Body>
+            <Footer>
+                <div class="panel-line panel-foot">FOOTER FRAGMENT</div>
+            </Footer>
+        </Panel>
+
+        <div class="footer">@pipelineLabel</div>
     </div>
 
-    @if (_count > 0)
-    {
-        <div class="status">LAST ACTION REGISTERED</div>
-    }
+    <div class="scroll-demo">
+        <div class="demo-title">SCROLL — overflow: auto</div>
+        <div class="scroll-area">
+            @for (var i = 1; i <= 24; i++)
+            {
+                <div class="scroll-line">Item @i — @_name</div>
+            }
+        </div>
+        <div class="hint">Mouse wheel, arrow keys or drag the thumb</div>
 
-    <MyButton Value="Salut mec"></MyButton>
-    <MyButton Value="Salut mec"></MyButton>
-    <MyButton Value="Salut mec"></MyButton>
-    
-    <Card>
-        <div class="field-label">INPUT FIELD (ChildContent)</div>
-        <input class="field" value="@_name" @bind-value="_name"/>
-        <div class="status">@_name</div>
-    </Card>
-
-    <Panel>
-        <Header>
-            <div class="panel-heading">PANEL — MULTIPLE RENDERFRAGMENTS</div>
-        </Header>
-        <Body>
-            <div class="panel-line">Body fragment · @_name</div>
-            <div class="panel-line">Header, Body and Footer are separate RenderFragment parameters</div>
-        </Body>
-        <Footer>
-            <div class="panel-line panel-foot">FOOTER FRAGMENT</div>
-        </Footer>
-    </Panel>
-
-    <div class="footer">@pipelineLabel</div>
-    
-    <MyButton Value="Salut mec"></MyButton>
+        <div class="demo-title">CLIP — overflow: hidden</div>
+        <div class="clip-demo">
+            <div class="clip-wide">This row is wider than its container</div>
+        </div>
+        <div class="hint">Content past the edge is clipped</div>
+    </div>
 </div>
 
 @code {
-    
+
     private int _count;
     private string _name = "Type input here";
     private int _renderCount;

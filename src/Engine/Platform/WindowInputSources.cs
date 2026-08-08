@@ -27,6 +27,19 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
     private int _lastX = int.MinValue;
     private int _lastY = int.MinValue;
 
+    // Mouse wheel messages carry coordinates and deltas that polling APIs cannot
+    // see, so the window procedure is subclassed once to forward them here.
+    private const int WmMouseWheel = 0x020A;
+    private const int WmMouseHWheel = 0x020E;
+    private const int WmNcDestroy = 0x0082;
+    private const int GwlpWndProc = -4;
+    private delegate nint WindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
+    private static readonly Dictionary<nint, WindowsWindowInputSource> SubclassedWindows = new();
+    private static WindowProc? _subclassProc; // Kept alive for the process lifetime.
+    private nint _originalWndProc;
+    private nint _subclassedHandle;
+    private bool _subclassed;
+
     public WindowsWindowInputSource(Func<nint> windowHandle) => _windowHandle = windowHandle;
     public event Action<PointerMoveEvent>? PointerMoved;
     public event Action<PointerButtonEvent>? PointerButtonChanged;
@@ -36,7 +49,9 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
     public void Update()
     {
         var handle = _windowHandle();
-        if (handle == 0 || GetForegroundWindow() != handle) return;
+        if (handle == 0) return;
+        EnsureSubclassed(handle);
+        if (GetForegroundWindow() != handle) return;
         var now = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
         if (GetCursorPos(out var point) && ScreenToClient(handle, ref point))
         {
@@ -70,7 +85,62 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
         }
     }
 
-    public void Dispose() { }
+    private void EnsureSubclassed(nint handle)
+    {
+        if (_subclassed || handle == 0) return;
+        _subclassProc ??= SubclassProc;
+        var original = SetWindowLongPtr(handle, GwlpWndProc, Marshal.GetFunctionPointerForDelegate(_subclassProc));
+        if (original != 0)
+        {
+            _originalWndProc = original;
+            _subclassedHandle = handle;
+            SubclassedWindows[handle] = this;
+            _subclassed = true;
+        }
+    }
+
+    private static nint SubclassProc(nint hWnd, uint msg, nint wParam, nint lParam)
+    {
+        if ((msg is WmMouseWheel or WmMouseHWheel) && SubclassedWindows.TryGetValue(hWnd, out var source))
+        {
+            var delta = (short)((uint)wParam >> 16); // HIWORD: multiples of 120 per notch.
+            if (delta != 0 && source._originalWndProc != 0)
+            {
+                var point = new Point { X = (short)((uint)lParam & 0xFFFF), Y = (short)((uint)lParam >> 16) };
+                if (ScreenToClient(hWnd, ref point))
+                {
+                    var normalized = delta / 120f;
+                    source.PointerWheelChanged?.Invoke(new PointerWheelEvent(
+                        point.X, point.Y,
+                        msg == WmMouseHWheel ? normalized : 0,
+                        msg == WmMouseWheel ? normalized : 0));
+                }
+            }
+        }
+        // The final WM_NCDESTROY must still reach the original procedure, and the
+        // instance must forget its handle: the window is gone, so a later Dispose
+        // must not touch a dead handle.
+        if (msg == WmNcDestroy && SubclassedWindows.Remove(hWnd, out var destroyed))
+            destroyed._subclassed = false;
+        var original = SubclassedWindows.TryGetValue(hWnd, out var instance) ? instance._originalWndProc : 0;
+        return original != 0 ? CallWindowProc(original, hWnd, msg, wParam, lParam) : 0;
+    }
+
+    public void Dispose()
+    {
+        if (!_subclassed) return;
+        // Restore the original window procedure using the handle captured when
+        // subclassing. Re-resolving the handle through the GLFW window is unsafe
+        // during shutdown: the window may already be destroyed, and
+        // glfwGetWin32Window on a freed window crashes. user32 validates raw
+        // HWNDs, so SetWindowLongPtr on a dead handle is harmless.
+        if (_subclassedHandle != 0 && _originalWndProc != 0)
+            SetWindowLongPtr(_subclassedHandle, GwlpWndProc, _originalWndProc);
+        SubclassedWindows.Remove(_subclassedHandle);
+        _subclassedHandle = 0;
+        _subclassed = false;
+    }
+
     private static readonly int[] ButtonKeys = [0x01, 0x02, 0x04, 0x05, 0x06];
 
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
@@ -82,6 +152,9 @@ internal sealed class WindowsWindowInputSource : IWindowInputSource
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point point);
     [DllImport("user32.dll")] private static extern bool ScreenToClient(nint window, ref Point point);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
+    [DllImport("user32.dll")] private static extern nint CallWindowProc(nint lpPrevWndFunc, nint hWnd, uint msg, nint wParam, nint lParam);
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X; public int Y; }
 
     private static string? TranslateKey(int key)

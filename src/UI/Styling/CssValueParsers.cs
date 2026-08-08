@@ -78,6 +78,23 @@ public static class CssValueParsers
         return true;
     }
 
+    /// <summary>
+    /// Parses <c>scrollbar-width</c>: <c>auto</c> (0, engine default),
+    /// <c>thin</c> (6px) or an explicit length in px.
+    /// </summary>
+    public static bool TryParseScrollbarWidth(string value, out float result)
+    {
+        result = 0;
+        var trimmed = value.Trim();
+        if (trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase)) return true;
+        if (trimmed.Equals("thin", StringComparison.OrdinalIgnoreCase))
+        {
+            result = 6;
+            return true;
+        }
+        return TryParseLength(trimmed, out result);
+    }
+
     /// <summary>Parses a duration, expressed in seconds (<c>200ms</c> or <c>0.2s</c>).</summary>
     public static bool TryParseTime(string value, out float result)
     {

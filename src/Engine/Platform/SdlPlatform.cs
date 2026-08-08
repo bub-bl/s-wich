@@ -104,8 +104,11 @@ public sealed class SdlPlatform : IPlatform
             if (_disposed)
                 return;
 
-            _window.Dispose();
+            // Tear the input source down before the window: on Windows it
+            // restores its subclassed window procedure through the native
+            // handle, which is invalid once the GLFW window is destroyed.
             _input.Dispose();
+            _window.Dispose();
             _disposed = true;
         }
 

@@ -104,7 +104,7 @@ public static class CssProperties
         Register(Keyword("direction", s => s.Direction, (s, v) => s.Direction = v, "inherit",
             "inherit", "ltr", "rtl"));
         Register(Keyword("overflow", s => s.Overflow, (s, v) => s.Overflow = v, "visible",
-            "visible", "hidden", "scroll"));
+            "visible", "hidden", "scroll", "auto", "clip"));
         Register(Keyword("box-sizing", s => s.BoxSizing, (s, v) => s.BoxSizing = v, "border-box",
             "border-box", "content-box"));
         Register(Text("text-align", s => s.TextAlign, (s, v) => s.TextAlign = v, "left", inherited: true));
@@ -173,6 +173,13 @@ public static class CssProperties
         Register(Color("background-color", s => s.BackgroundColor, (s, v) => s.BackgroundColor = v,
             UiColor.Transparent, animatable: true));
         Register(Color("color", s => s.Color, (s, v) => s.Color = v, UiColor.White, inherited: true, animatable: true));
+
+        // Scrollbar styling, applied per element.
+        Register(new ScrollbarColorCssProperty());
+        Register(Number("scrollbar-width", s => s.ScrollbarWidth, (s, v) => s.ScrollbarWidth = v, 0,
+            parser: CssValueParsers.TryParseScrollbarWidth));
+        Register(Number("scrollbar-radius", s => s.ScrollbarRadius, (s, v) => s.ScrollbarRadius = v, 5,
+            animatable: true, parser: CssValueParsers.TryParseLength));
     }
 
     private static readonly string[] AlignKeywords = ["auto", "flex-start", "flex-end", "center", "stretch", "baseline", "space-between", "space-around", "space-evenly", "start", "end"];
@@ -322,6 +329,33 @@ public static class CssProperties
                 }
             }
             return false;
+        }
+    }
+
+    /// <summary>
+    /// The <c>scrollbar-color</c> shorthand: <c>auto</c> resets to the engine
+    /// defaults, otherwise two colors (thumb then track) as in CSS.
+    /// </summary>
+    private sealed class ScrollbarColorCssProperty : CompoundCssProperty
+    {
+        public ScrollbarColorCssProperty() : base("scrollbar-color")
+        {
+        }
+
+        public override bool TryApply(ComputedStyle style, string rawValue)
+        {
+            var parts = rawValue.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 1 && parts[0].Equals("auto", StringComparison.OrdinalIgnoreCase))
+            {
+                style.ScrollbarThumbColor = new UiColor(150, 172, 205, 215);
+                style.ScrollbarTrackColor = new UiColor(15, 24, 40, 110);
+                return true;
+            }
+            if (parts.Length != 2) return false;
+            if (!UiColor.TryParse(parts[0], out var thumb) || !UiColor.TryParse(parts[1], out var track)) return false;
+            style.ScrollbarThumbColor = thumb;
+            style.ScrollbarTrackColor = track;
+            return true;
         }
     }
 
