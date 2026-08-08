@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 public interface ICanvas
 {

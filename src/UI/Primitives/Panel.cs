@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
 
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 public class Panel
 {
@@ -82,7 +82,7 @@ public class Panel
             return;
         }
         var duration = target.TransitionDuration > 0 ? target.TransitionDuration : ComputedStyle.TransitionDuration;
-        var canAnimate = duration > 0 && HasTransition(target, "background-color", "color", "opacity", "border-radius");
+        var canAnimate = duration > 0 && HasAnimatableTransition(target);
         _styleTarget = target.Clone();
         if (!canAnimate)
         {
@@ -112,58 +112,35 @@ public class Panel
         return true;
     }
 
-    private static bool HasTransition(ComputedStyle style, params string[] properties) => style.TransitionProperty.Equals("all", StringComparison.OrdinalIgnoreCase) || properties.Any(p => style.TransitionProperty.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => x.Equals(p, StringComparison.OrdinalIgnoreCase)));
-    private static bool StylesEqual(ComputedStyle a, ComputedStyle b) =>
-        a.Display == b.Display &&
-        a.FlexDirection == b.FlexDirection &&
-        a.AlignItems == b.AlignItems &&
-        a.JustifyContent == b.JustifyContent &&
-        a.Overflow == b.Overflow &&
-        a.TextAlign == b.TextAlign &&
-        a.VerticalAlign == b.VerticalAlign &&
-        a.BoxSizing == b.BoxSizing &&
-        NullableFloatEqual(a.Width, b.Width) &&
-        NullableFloatEqual(a.Height, b.Height) &&
-        NullableFloatEqual(a.MinWidth, b.MinWidth) &&
-        NullableFloatEqual(a.MaxWidth, b.MaxWidth) &&
-        NullableFloatEqual(a.MinHeight, b.MinHeight) &&
-        NullableFloatEqual(a.MaxHeight, b.MaxHeight) &&
-        FloatEqual(a.FlexGrow, b.FlexGrow) &&
-        FloatEqual(a.Gap, b.Gap) &&
-        FloatEqual(a.RowGap, b.RowGap) &&
-        FloatEqual(a.ColumnGap, b.ColumnGap) &&
-        FloatEqual(a.Margin, b.Margin) &&
-        FloatEqual(a.Padding, b.Padding) &&
-        FloatEqual(a.MarginTop, b.MarginTop) &&
-        FloatEqual(a.MarginRight, b.MarginRight) &&
-        FloatEqual(a.MarginBottom, b.MarginBottom) &&
-        FloatEqual(a.MarginLeft, b.MarginLeft) &&
-        FloatEqual(a.PaddingTop, b.PaddingTop) &&
-        FloatEqual(a.PaddingRight, b.PaddingRight) &&
-        FloatEqual(a.PaddingBottom, b.PaddingBottom) &&
-        FloatEqual(a.PaddingLeft, b.PaddingLeft) &&
-        FloatEqual(a.Opacity, b.Opacity) &&
-        FloatEqual(a.BorderRadius, b.BorderRadius) &&
-        FloatEqual(a.FontSize, b.FontSize) &&
-        FloatEqual(a.LineHeight, b.LineHeight) &&
-        a.TransitionProperty == b.TransitionProperty &&
-        FloatEqual(a.TransitionDuration, b.TransitionDuration) &&
-        a.TransitionTimingFunction == b.TransitionTimingFunction &&
-        a.BackgroundColor == b.BackgroundColor &&
-        a.Color == b.Color;
+    /// <summary>
+    /// True when the transition-property list names at least one registered
+    /// animatable property. Data-driven through <see cref="CssProperties"/> so
+    /// a newly registered animatable property transitions without extra wiring.
+    /// </summary>
+    private static bool HasAnimatableTransition(ComputedStyle style)
+    {
+        if (style.TransitionProperty.Equals("all", StringComparison.OrdinalIgnoreCase)) return true;
+        var names = style.TransitionProperty.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return CssProperties.All.Any(p => p.Animatable && names.Any(n => n.Equals(p.Name, StringComparison.OrdinalIgnoreCase)));
+    }
 
-    private static bool FloatEqual(float a, float b) => Math.Abs(a - b) < 0.0001f;
-    private static bool NullableFloatEqual(float? a, float? b) => a is null ? b is null : b is not null && FloatEqual(a.Value, b.Value);
+    private static bool StylesEqual(ComputedStyle a, ComputedStyle b)
+    {
+        foreach (var property in CssProperties.All)
+            if (!property.ValuesEqual(property.GetValue(a), property.GetValue(b))) return false;
+        return true;
+    }
+
     private static ComputedStyle Interpolate(ComputedStyle from, ComputedStyle to, float t)
     {
         var result = to.Clone();
-        result.BackgroundColor = Lerp(from.BackgroundColor, to.BackgroundColor, t);
-        result.Color = Lerp(from.Color, to.Color, t);
-        result.Opacity = from.Opacity + (to.Opacity - from.Opacity) * t;
-        result.BorderRadius = from.BorderRadius + (to.BorderRadius - from.BorderRadius) * t;
+        foreach (var property in CssProperties.All.Where(p => p.Animatable))
+        {
+            var value = property.Lerp(property.GetValue(from), property.GetValue(to), t);
+            if (value is not null) property.SetValue(result, value);
+        }
         return result;
     }
-    private static UiColor Lerp(UiColor a, UiColor b, float t) => new((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t), (byte)(a.A + (b.A - a.A) * t));
     internal void SetHovered(bool value)
     {
         if (IsHovered == value) return;

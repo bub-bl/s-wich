@@ -1,6 +1,6 @@
 @page "/"
 @page "/demo"
-@inherits Crowbar.Engine.UI.RazorPanel
+@inherits Crowbar.UI.RazorPanel
 @using System
 @using System.Text
 @namespace Crowbar.Editor.Ui
@@ -14,11 +14,11 @@
     <div class="separator"></div>
 
     <div class="row">
-        <button class="action" @onclick="@Increment">CLICKED @count TIMES</button>
-        <div class="status">SCREEN PANEL ACTIVE · RENDER @renderCount</div>
+        <button class="action" @onclick="@Increment">CLICKED @_count TIMES</button>
+        <div class="status">SCREEN PANEL ACTIVE · RENDER @_renderCount</div>
     </div>
 
-    @if (count > 0)
+    @if (_count > 0)
     {
         <div class="status">LAST ACTION REGISTERED</div>
     }
@@ -29,8 +29,8 @@
     
     <Card>
         <div class="field-label">INPUT FIELD (ChildContent)</div>
-        <input class="field" value="@name" @bind-value="name"/>
-        <div class="status">@name</div>
+        <input class="field" value="@_name" @bind-value="_name"/>
+        <div class="status">@_name</div>
     </Card>
 
     <Panel>
@@ -38,7 +38,7 @@
             <div class="panel-heading">PANEL — MULTIPLE RENDERFRAGMENTS</div>
         </Header>
         <Body>
-            <div class="panel-line">Body fragment · @name</div>
+            <div class="panel-line">Body fragment · @_name</div>
             <div class="panel-line">Header, Body and Footer are separate RenderFragment parameters</div>
         </Body>
         <Footer>
@@ -52,20 +52,21 @@
 </div>
 
 @code {
-    private int count;
-    private string name = "Type input here";
-    private int renderCount;
+    
+    private int _count;
+    private string _name = "Type input here";
+    private int _renderCount;
 
-    protected override int BuildHash() => HashCode.Combine(count, name);
+    protected override int BuildHash() => HashCode.Combine(_count, _name);
 
     protected override void OnAfterRender(bool firstRender)
     {
-        renderCount++;
+        _renderCount++;
     }
 
     private void Increment()
     {
-        count++;
+        _count++;
     }
 
 }

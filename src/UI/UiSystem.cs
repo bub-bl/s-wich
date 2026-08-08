@@ -1,4 +1,4 @@
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 /// <summary>A routable Razor page declared with the <c>@page</c> directive.</summary>
 public sealed record PageRoute(string Template, string TagName, string RazorPath, string ClassName);
@@ -157,13 +157,13 @@ public sealed partial class UiSystem : IDisposable
 
     public void LoadStyles(string css)
     {
-        GlobalStyleSheet = Crowbar.Engine.UI.StyleSheet.Parse(css);
+        GlobalStyleSheet = StyleSheet.Parse(css);
         RebuildCombinedStyleSheet();
     }
 
     public void LoadScopedStyles(string key, string css, string scopeId)
     {
-        _scopedStyleSheets[key] = Crowbar.Engine.UI.StyleSheet.Parse(css, scopeId);
+        _scopedStyleSheets[key] = StyleSheet.Parse(css, scopeId);
         RebuildCombinedStyleSheet();
     }
 

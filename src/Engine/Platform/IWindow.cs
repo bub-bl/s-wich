@@ -1,3 +1,5 @@
+using Crowbar.UI;
+
 namespace Crowbar.Engine.Platform;
 
 public interface IWindow : IDisposable

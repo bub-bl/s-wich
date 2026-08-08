@@ -1,6 +1,6 @@
 using Crowbar.Engine.Platform;
 using Crowbar.Engine;
-using Crowbar.Engine.UI;
+using Crowbar.UI;
 
 namespace Crowbar.Editor;
 
@@ -8,12 +8,6 @@ internal static class Program
 {
     public static void Main()
     {
-        if (Environment.GetEnvironmentVariable("CROWBAR_UI_SMOKE_TESTS") == "1")
-        {
-            UiSmokeTests.Run();
-            Console.WriteLine("Crowbar UI smoke tests passed.");
-            if (Environment.GetEnvironmentVariable("CROWBAR_UI_SMOKE_ONLY") == "1") return;
-        }
         using IPlatform platform = new SdlPlatform();
         using var window = platform.CreateWindow(new WindowOptions(
             Title: "Crowbar",

@@ -1,6 +1,4 @@
-using Crowbar.Engine.Platform;
-
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 public sealed partial class UiSystem
 {
@@ -90,7 +88,7 @@ public sealed partial class UiSystem
         ProcessKey(new KeyEvent(keyCode, isDown, isRepeat));
     }
 
-    internal void ProcessKey(KeyEvent keyEvent)
+    public void ProcessKey(KeyEvent keyEvent)
     {
         if (FocusedPanel is TextInput input) input.HandleKey(keyEvent.KeyCode, keyEvent.IsDown, keyEvent.Text);
         if (FocusedPanel is not null) KeyChanged?.Invoke(FocusedPanel, keyEvent);

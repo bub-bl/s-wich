@@ -1,4 +1,4 @@
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 public readonly record struct UiPointerEvent(float X, float Y, int Button = 0);
 

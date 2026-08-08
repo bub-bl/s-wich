@@ -1,4 +1,4 @@
-namespace Crowbar.Engine.Platform;
+namespace Crowbar.UI;
 
 public enum PointerButton
 {

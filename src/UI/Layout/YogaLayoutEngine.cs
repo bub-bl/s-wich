@@ -1,6 +1,6 @@
 using Facebook.Yoga;
 
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 /// <summary>Small Yoga-compatible flex layout adapter. The tree is kept independent of the renderer.</summary>
 public sealed class YogaLayoutEngine
@@ -21,7 +21,19 @@ public sealed class YogaLayoutEngine
 
     private static void ApplyStyles(Panel panel, StyleSheet? sheet, ComputedStyle? inherited)
     {
-        panel.ApplyComputedStyle(sheet?.Compute(panel) ?? new ComputedStyle());
+        ComputedStyle computed;
+        if (sheet is not null)
+        {
+            computed = sheet.Compute(panel);
+        }
+        else
+        {
+            // Without a global sheet the panel's inline styles still apply.
+            computed = new ComputedStyle();
+            StyleSheet.Apply(computed, panel.InlineStyle);
+        }
+
+        panel.ApplyComputedStyle(computed);
         if (inherited is not null)
         {
             if (panel.ComputedStyle.Color == UiColor.White) panel.ComputedStyle.Color = inherited.Color;

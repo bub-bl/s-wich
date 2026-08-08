@@ -2,7 +2,7 @@ using Crowbar.Engine.Rendering;
 using Silk.NET.WebGPU;
 using System.Runtime.InteropServices;
 using System.Numerics;
-using Crowbar.Engine.UI;
+using Crowbar.UI;
 
 namespace Crowbar.Engine;
 

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 /// <summary>World-space UI root. Projection/compositing is intentionally renderer-owned.</summary>
 public sealed class WorldPanel : Panel

@@ -1,4 +1,4 @@
-namespace Crowbar.Engine.UI;
+namespace Crowbar.UI;
 
 public sealed partial class UiSystem
 {
