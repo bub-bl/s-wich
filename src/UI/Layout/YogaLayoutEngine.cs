@@ -1,4 +1,5 @@
 using Facebook.Yoga;
+using SkiaSharp;
 
 namespace Crowbar.UI;
 
@@ -68,6 +69,7 @@ public sealed class YogaLayoutEngine
                 Display = style.Display.Equals("none", StringComparison.OrdinalIgnoreCase) || !panel.IsVisible ? Display.None : Display.Flex,
                 FlexGrow = new FloatOptional(style.FlexGrow),
                 Overflow = style.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ? Overflow.Hidden : Overflow.Visible,
+                BoxSizing = style.BoxSizing.Equals("content-box", StringComparison.OrdinalIgnoreCase) ? BoxSizing.ContentBox : BoxSizing.BorderBox,
             }
         };
         node.SetContext(panel);
@@ -98,12 +100,21 @@ public sealed class YogaLayoutEngine
             var text = panel is TextInput inputValue ? inputValue.Value : panel.Text;
             var fontSize = style.FontSize;
             var lineHeight = style.LineHeight > 0 ? style.LineHeight : style.FontSize * 1.25f;
-            var paddingX = style.PaddingLeft + style.PaddingRight;
-            var paddingY = style.PaddingTop + style.PaddingBottom;
+            // Yoga treats the measure result as the content box and adds the
+            // node's padding/border around it, so the callback must only size
+            // the text itself (adding padding here double-counted it). The text
+            // is measured with the same Skia font as the renderer so the layout
+            // box matches the drawn glyphs.
+            var textWidth = 0f;
+            using (var font = new SKFont { Size = fontSize })
+            {
+                foreach (var line in text.Split('\n'))
+                    textWidth = Math.Max(textWidth, font.MeasureText(line));
+            }
             node.SetMeasureFunc((_, availableWidth, _, _, _) => new YGSize
             {
-                Width = Math.Min(availableWidth > 0 ? availableWidth : float.MaxValue, text.Length * fontSize * 0.56f + paddingX),
-                Height = lineHeight + paddingY
+                Width = Math.Min(availableWidth > 0 ? availableWidth : float.MaxValue, textWidth),
+                Height = lineHeight
             });
         }
         for (var i = 0; i < panel.Children.Count; i++)
@@ -141,16 +152,31 @@ public sealed class YogaLayoutEngine
 
     private static Align ParseAlign(string value) => value switch
     {
+        "auto" => Align.Auto,
+        "flex-start" => Align.FlexStart,
         "center" => Align.Center,
         "flex-end" => Align.FlexEnd,
+        "stretch" => Align.Stretch,
+        "baseline" => Align.Baseline,
+        "space-between" => Align.SpaceBetween,
+        "space-around" => Align.SpaceAround,
+        "space-evenly" => Align.SpaceEvenly,
+        "start" => Align.Start,
+        "end" => Align.End,
         _ => Align.Stretch
     };
     private static Justify ParseJustify(string value) => value switch
     {
+        "auto" => Justify.Auto,
+        "flex-start" => Justify.FlexStart,
         "center" => Justify.Center,
         "flex-end" => Justify.FlexEnd,
+        "stretch" => Justify.Stretch,
         "space-between" => Justify.SpaceBetween,
         "space-around" => Justify.SpaceAround,
+        "space-evenly" => Justify.SpaceEvenly,
+        "start" => Justify.Start,
+        "end" => Justify.End,
         _ => Justify.FlexStart
     };
 }

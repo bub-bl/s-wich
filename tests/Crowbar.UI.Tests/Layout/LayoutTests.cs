@@ -89,6 +89,55 @@ public class LayoutTests
     }
 
     [Fact]
+    public void ContentBoxSizingAddsPaddingToWidth()
+    {
+        var root = new ScreenPanel();
+        var child = new Panel { TagName = "div" };
+        child.AddClass("box");
+        root.AddChild(child);
+
+        Layout(root, 320, 200, ".box { width: 100px; padding: 10px; box-sizing: content-box; }");
+
+        Assert.Equal(120, child.Layout.Width);
+    }
+
+    [Fact]
+    public void BorderBoxSizingKeepsPaddingInsideWidth()
+    {
+        var root = new ScreenPanel();
+        var child = new Panel { TagName = "div" };
+        child.AddClass("box");
+        root.AddChild(child);
+
+        Layout(root, 320, 200, ".box { width: 100px; padding: 10px; }");
+
+        Assert.Equal(100, child.Layout.Width);
+    }
+
+    [Fact]
+    public void TextPanelPaddingCountedOnce()
+    {
+        // Yoga adds the node padding around the measured text exactly once, so
+        // the box grows by 20 (not 40 from a double count). Comparing the padded
+        // and unpadded widths keeps the assertion independent of the exact font
+        // metrics and of Yoga's pixel-grid rounding.
+        var root = new ScreenPanel();
+        root.SetInlineStyle("align-items", "flex-start");
+        root.AddChild(new Label("hello"));
+        Layout(root, 320, 200);
+        var unpadded = root.Children[0].Layout.Width;
+
+        var paddedRoot = new ScreenPanel();
+        paddedRoot.SetInlineStyle("align-items", "flex-start");
+        var padded = new Label("hello");
+        padded.SetInlineStyle("padding", "10px");
+        paddedRoot.AddChild(padded);
+        Layout(paddedRoot, 320, 200);
+
+        Assert.Equal(unpadded + 20, padded.Layout.Width, 0);
+    }
+
+    [Fact]
     public void LayoutPassesIncrementPerLayout()
     {
         var root = new ScreenPanel();
