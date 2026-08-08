@@ -100,8 +100,8 @@ public class InputTests
 
         edit.SetValue("select me");
         using var font = new SkiaSharp.SKFont { Size = edit.ComputedStyle.FontSize };
-        var targetX = edit.Layout.X + edit.ComputedStyle.PaddingLeft + font.MeasureText("select");
-        ui.ProcessPointerDown(edit.Layout.X + edit.ComputedStyle.PaddingLeft + 1, edit.Layout.Y + 1);
+        var targetX = edit.Layout.X + edit.LayoutPadding.Left + font.MeasureText("select");
+        ui.ProcessPointerDown(edit.Layout.X + edit.LayoutPadding.Left + 1, edit.Layout.Y + 1);
         ui.ProcessPointerMove(targetX, edit.Layout.Y + 1);
         ui.ProcessPointerUp(targetX, edit.Layout.Y + 1);
         Assert.True(edit.HasSelection);

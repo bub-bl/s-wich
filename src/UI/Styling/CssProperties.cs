@@ -33,7 +33,7 @@ public static class CssProperties
         foreach (var property in Registry.Values) property.SetValue(style, property.DefaultValue);
     }
 
-    /// <summary>Creates a keyword/string property (display, overflow, ...).</summary>
+    /// <summary>Creates a free-form keyword/string property (transition, ...).</summary>
     public static CssProperty<string> Text(string name, Func<ComputedStyle, string> getter,
         Action<ComputedStyle, string> setter, string defaultValue, bool inherited = false) =>
         new(name, getter, setter, static (string value, out string result) =>
@@ -42,6 +42,24 @@ public static class CssProperties
             return true;
         }, defaultValue, inherited, animatable: false, lerper: null);
 
+    /// <summary>
+    /// Creates a keyword property validated against an allowed set. Values are
+    /// normalized to lowercase; unknown values are ignored, mirroring CSS.
+    /// </summary>
+    public static CssProperty<string> Keyword(string name, Func<ComputedStyle, string> getter,
+        Action<ComputedStyle, string> setter, string defaultValue, params string[] allowed) =>
+        new(name, getter, setter, (string value, out string result) =>
+        {
+            result = defaultValue;
+            var normalized = value.Trim().ToLowerInvariant();
+            if (Array.IndexOf(allowed, normalized) >= 0)
+            {
+                result = normalized;
+                return true;
+            }
+            return false;
+        }, defaultValue, inherited: false, animatable: false, lerper: null);
+
     /// <summary>Creates a non-nullable numeric property (opacity, font-size, ...).</summary>
     public static CssProperty<float> Number(string name, Func<ComputedStyle, float> getter,
         Action<ComputedStyle, float> setter, float defaultValue, bool inherited = false,
@@ -49,11 +67,12 @@ public static class CssProperties
         new(name, getter, setter, parser ?? CssValueParsers.TryParseNumber, defaultValue, inherited, animatable,
             animatable ? LerpFloat : null);
 
-    /// <summary>Creates a nullable dimension property (width, height, ...).</summary>
-    public static CssProperty<float?> Dimension(string name, Func<ComputedStyle, float?> getter,
-        Action<ComputedStyle, float?> setter, TryParseHandler<float?>? parser = null) =>
-        new(name, getter, setter, parser ?? CssValueParsers.TryParseDimension, null, inherited: false, animatable: false,
-            lerper: null);
+    /// <summary>Creates a CSS length property (width, margin, flex-basis, ...).</summary>
+    public static CssProperty<CssLength> Length(string name, Func<ComputedStyle, CssLength> getter,
+        Action<ComputedStyle, CssLength> setter, bool allowAuto = true, bool allowContent = false) =>
+        new(name, getter, setter, (string value, out CssLength result) =>
+            CssValueParsers.TryParseCssLength(value, out result, allowAuto, allowContent),
+            CssLength.Undefined, inherited: false, animatable: false, lerper: null);
 
     /// <summary>Creates a color property (background-color, color, ...).</summary>
     public static CssProperty<UiColor> Color(string name, Func<ComputedStyle, UiColor> getter,
@@ -69,28 +88,45 @@ public static class CssProperties
     private static void RegisterBuiltIns()
     {
         // Layout keywords.
-        Register(Text("display", s => s.Display, (s, v) => s.Display = v, "flex"));
-        Register(Text("flex-direction", s => s.FlexDirection, (s, v) => s.FlexDirection = v, "column"));
-        Register(Text("align-items", s => s.AlignItems, (s, v) => s.AlignItems = v, "stretch"));
-        Register(Text("justify-content", s => s.JustifyContent, (s, v) => s.JustifyContent = v, "flex-start"));
-        Register(Text("overflow", s => s.Overflow, (s, v) => s.Overflow = v, "visible"));
+        Register(Keyword("display", s => s.Display, (s, v) => s.Display = v, "flex", "flex", "none", "contents"));
+        Register(Keyword("flex-direction", s => s.FlexDirection, (s, v) => s.FlexDirection = v, "column",
+            "row", "row-reverse", "column", "column-reverse"));
+        Register(Keyword("flex-wrap", s => s.FlexWrap, (s, v) => s.FlexWrap = v, "nowrap",
+            "nowrap", "wrap", "wrap-reverse"));
+        Register(Keyword("align-items", s => s.AlignItems, (s, v) => s.AlignItems = v, "stretch", AlignKeywords));
+        Register(Keyword("align-content", s => s.AlignContent, (s, v) => s.AlignContent = v, "flex-start", AlignKeywords));
+        Register(Keyword("align-self", s => s.AlignSelf, (s, v) => s.AlignSelf = v, "auto", AlignKeywords));
+        Register(Keyword("justify-content", s => s.JustifyContent, (s, v) => s.JustifyContent = v, "flex-start", JustifyKeywords));
+        Register(Keyword("justify-items", s => s.JustifyItems, (s, v) => s.JustifyItems = v, "stretch", JustifyKeywords));
+        Register(Keyword("justify-self", s => s.JustifySelf, (s, v) => s.JustifySelf = v, "auto", JustifyKeywords));
+        Register(Keyword("position", s => s.PositionType, (s, v) => s.PositionType = v, "relative",
+            "relative", "absolute", "static"));
+        Register(Keyword("direction", s => s.Direction, (s, v) => s.Direction = v, "inherit",
+            "inherit", "ltr", "rtl"));
+        Register(Keyword("overflow", s => s.Overflow, (s, v) => s.Overflow = v, "visible",
+            "visible", "hidden", "scroll"));
+        Register(Keyword("box-sizing", s => s.BoxSizing, (s, v) => s.BoxSizing = v, "border-box",
+            "border-box", "content-box"));
         Register(Text("text-align", s => s.TextAlign, (s, v) => s.TextAlign = v, "left", inherited: true));
         Register(Text("vertical-align", s => s.VerticalAlign, (s, v) => s.VerticalAlign = v, "top", inherited: true));
-        Register(Text("box-sizing", s => s.BoxSizing, (s, v) => s.BoxSizing = v, "border-box"));
         Register(Text("transition-property", s => s.TransitionProperty, (s, v) => s.TransitionProperty = v, "none"));
         Register(Text("transition-timing-function", s => s.TransitionTimingFunction, (s, v) =>
             s.TransitionTimingFunction = v, "ease"));
 
         // Dimensions.
-        Register(Dimension("width", s => s.Width, (s, v) => s.Width = v));
-        Register(Dimension("height", s => s.Height, (s, v) => s.Height = v));
-        Register(Dimension("min-width", s => s.MinWidth, (s, v) => s.MinWidth = v));
-        Register(Dimension("max-width", s => s.MaxWidth, (s, v) => s.MaxWidth = v));
-        Register(Dimension("min-height", s => s.MinHeight, (s, v) => s.MinHeight = v));
-        Register(Dimension("max-height", s => s.MaxHeight, (s, v) => s.MaxHeight = v));
+        Register(Length("width", s => s.Width, (s, v) => s.Width = v, allowContent: true));
+        Register(Length("height", s => s.Height, (s, v) => s.Height = v, allowContent: true));
+        Register(Length("min-width", s => s.MinWidth, (s, v) => s.MinWidth = v));
+        Register(Length("max-width", s => s.MaxWidth, (s, v) => s.MaxWidth = v));
+        Register(Length("min-height", s => s.MinHeight, (s, v) => s.MinHeight = v));
+        Register(Length("max-height", s => s.MaxHeight, (s, v) => s.MaxHeight = v));
 
-        // Numbers.
+        // Flex.
         Register(Number("flex-grow", s => s.FlexGrow, (s, v) => s.FlexGrow = v, 0));
+        Register(Number("flex-shrink", s => s.FlexShrink, (s, v) => s.FlexShrink = v, 1));
+        Register(Length("flex-basis", s => s.FlexBasis, (s, v) => s.FlexBasis = v, allowContent: true));
+        Register(new FlexCssProperty());
+        Register(Number("aspect-ratio", s => s.AspectRatio, (s, v) => s.AspectRatio = v, 0));
         Register(Number("opacity", s => s.Opacity, (s, v) => s.Opacity = v, 1, animatable: true));
         Register(Number("border-radius", s => s.BorderRadius, (s, v) => s.BorderRadius = v, 0, animatable: true));
         Register(Number("font-size", s => s.FontSize, (s, v) => s.FontSize = v, 16, inherited: true,
@@ -102,20 +138,33 @@ public static class CssProperties
 
         // Box model: shorthand + individual sides.
         Register(new MarginCssProperty());
-        Register(Number("margin-top", s => s.MarginTop, (s, v) => s.MarginTop = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("margin-right", s => s.MarginRight, (s, v) => s.MarginRight = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("margin-bottom", s => s.MarginBottom, (s, v) => s.MarginBottom = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("margin-left", s => s.MarginLeft, (s, v) => s.MarginLeft = v, 0, parser: CssValueParsers.TryParseLength));
+        Register(Length("margin-top", s => s.MarginTop, (s, v) => s.MarginTop = v));
+        Register(Length("margin-right", s => s.MarginRight, (s, v) => s.MarginRight = v));
+        Register(Length("margin-bottom", s => s.MarginBottom, (s, v) => s.MarginBottom = v));
+        Register(Length("margin-left", s => s.MarginLeft, (s, v) => s.MarginLeft = v));
         Register(new PaddingCssProperty());
-        Register(Number("padding-top", s => s.PaddingTop, (s, v) => s.PaddingTop = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("padding-right", s => s.PaddingRight, (s, v) => s.PaddingRight = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("padding-bottom", s => s.PaddingBottom, (s, v) => s.PaddingBottom = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("padding-left", s => s.PaddingLeft, (s, v) => s.PaddingLeft = v, 0, parser: CssValueParsers.TryParseLength));
+        Register(Length("padding-top", s => s.PaddingTop, (s, v) => s.PaddingTop = v, allowAuto: false));
+        Register(Length("padding-right", s => s.PaddingRight, (s, v) => s.PaddingRight = v, allowAuto: false));
+        Register(Length("padding-bottom", s => s.PaddingBottom, (s, v) => s.PaddingBottom = v, allowAuto: false));
+        Register(Length("padding-left", s => s.PaddingLeft, (s, v) => s.PaddingLeft = v, allowAuto: false));
+
+        // Border widths participate in the box model through Yoga.
+        Register(new BorderCssProperty());
+        Register(Length("border-top", s => s.BorderTop, (s, v) => s.BorderTop = v, allowAuto: false));
+        Register(Length("border-right", s => s.BorderRight, (s, v) => s.BorderRight = v, allowAuto: false));
+        Register(Length("border-bottom", s => s.BorderBottom, (s, v) => s.BorderBottom = v, allowAuto: false));
+        Register(Length("border-left", s => s.BorderLeft, (s, v) => s.BorderLeft = v, allowAuto: false));
+
+        // Absolute positioning offsets.
+        Register(Length("top", s => s.PositionTop, (s, v) => s.PositionTop = v));
+        Register(Length("right", s => s.PositionRight, (s, v) => s.PositionRight = v));
+        Register(Length("bottom", s => s.PositionBottom, (s, v) => s.PositionBottom = v));
+        Register(Length("left", s => s.PositionLeft, (s, v) => s.PositionLeft = v));
 
         // Gap.
         Register(new GapCssProperty());
-        Register(Number("row-gap", s => s.RowGap, (s, v) => s.RowGap = v, 0, parser: CssValueParsers.TryParseLength));
-        Register(Number("column-gap", s => s.ColumnGap, (s, v) => s.ColumnGap = v, 0, parser: CssValueParsers.TryParseLength));
+        Register(Length("row-gap", s => s.RowGap, (s, v) => s.RowGap = v, allowAuto: false));
+        Register(Length("column-gap", s => s.ColumnGap, (s, v) => s.ColumnGap = v, allowAuto: false));
 
         // Transitions.
         Register(new TransitionCssProperty());
@@ -126,6 +175,9 @@ public static class CssProperties
         Register(Color("color", s => s.Color, (s, v) => s.Color = v, UiColor.White, inherited: true, animatable: true));
     }
 
+    private static readonly string[] AlignKeywords = ["auto", "flex-start", "flex-end", "center", "stretch", "baseline", "space-between", "space-around", "space-evenly", "start", "end"];
+    private static readonly string[] JustifyKeywords = ["auto", "flex-start", "flex-end", "center", "stretch", "space-between", "space-around", "space-evenly", "start", "end"];
+
     private sealed class MarginCssProperty : CompoundCssProperty
     {
         public MarginCssProperty() : base("margin")
@@ -134,7 +186,7 @@ public static class CssProperties
 
         public override bool TryApply(ComputedStyle style, string rawValue)
         {
-            if (!CssValueParsers.TryParseBox(rawValue, out var box)) return false;
+            if (!CssValueParsers.TryParseLengthBox(rawValue, out var box, allowAuto: true)) return false;
             style.Margin = box.Top;
             style.MarginTop = box.Top;
             style.MarginRight = box.Right;
@@ -152,7 +204,7 @@ public static class CssProperties
 
         public override bool TryApply(ComputedStyle style, string rawValue)
         {
-            if (!CssValueParsers.TryParseBox(rawValue, out var box)) return false;
+            if (!CssValueParsers.TryParseLengthBox(rawValue, out var box)) return false;
             style.Padding = box.Top;
             style.PaddingTop = box.Top;
             style.PaddingRight = box.Right;
@@ -172,14 +224,104 @@ public static class CssProperties
         {
             var parts = rawValue.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length is < 1 or > 2) return false;
-            if (!CssValueParsers.TryParseLength(parts[0], out var row)) return false;
-            var column = parts.Length > 1 && CssValueParsers.TryParseLength(parts[1], out var parsedColumn)
+            if (!CssValueParsers.TryParseCssLength(parts[0], out var row, allowAuto: false, allowContent: false)) return false;
+            var column = parts.Length > 1 &&
+                         CssValueParsers.TryParseCssLength(parts[1], out var parsedColumn, allowAuto: false, allowContent: false)
                 ? parsedColumn
                 : row;
             style.Gap = row;
             style.RowGap = row;
             style.ColumnGap = column;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// The <c>flex</c> shorthand expands into flex-grow/flex-shrink/flex-basis
+    /// per the CSS spec: <c>flex: 1</c> means <c>1 1 0%</c>, <c>flex: none</c>
+    /// means <c>0 0 auto</c>.
+    /// </summary>
+    private sealed class FlexCssProperty : CompoundCssProperty
+    {
+        public FlexCssProperty() : base("flex")
+        {
+        }
+
+        public override bool TryApply(ComputedStyle style, string rawValue)
+        {
+            var parts = rawValue.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 0 || parts.Length > 3) return false;
+            if (parts.Length == 1 && parts[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                style.FlexGrow = 0;
+                style.FlexShrink = 0;
+                style.FlexBasis = CssLength.Auto;
+                return true;
+            }
+
+            float grow;
+            float shrink;
+            CssLength basis;
+            if (parts.Length == 1)
+            {
+                if (CssValueParsers.TryParseNumber(parts[0], out grow))
+                {
+                    shrink = 1;
+                    basis = CssLength.Points(0);
+                }
+                else if (CssValueParsers.TryParseCssLength(parts[0], out basis))
+                {
+                    grow = 1;
+                    shrink = 1;
+                }
+                else return false;
+            }
+            else if (parts.Length == 2)
+            {
+                if (CssValueParsers.TryParseNumber(parts[0], out grow) && CssValueParsers.TryParseNumber(parts[1], out shrink))
+                {
+                    basis = CssLength.Auto;
+                }
+                else if (CssValueParsers.TryParseNumber(parts[0], out grow) &&
+                         CssValueParsers.TryParseCssLength(parts[1], out basis))
+                {
+                    shrink = 1;
+                }
+                else return false;
+            }
+            else
+            {
+                if (!CssValueParsers.TryParseNumber(parts[0], out grow) ||
+                    !CssValueParsers.TryParseNumber(parts[1], out shrink) ||
+                    !CssValueParsers.TryParseCssLength(parts[2], out basis)) return false;
+            }
+
+            style.FlexGrow = Math.Max(0, grow);
+            style.FlexShrink = Math.Max(0, shrink);
+            style.FlexBasis = basis;
+            return true;
+        }
+    }
+
+    /// <summary>Extracts the border width from the <c>border</c> shorthand (<c>1px solid #ccc</c>).</summary>
+    private sealed class BorderCssProperty : CompoundCssProperty
+    {
+        public BorderCssProperty() : base("border")
+        {
+        }
+
+        public override bool TryApply(ComputedStyle style, string rawValue)
+        {
+            foreach (var token in rawValue.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (CssValueParsers.TryParseCssLength(token, out var length, allowAuto: false, allowContent: false) && length.IsDefined)
+                {
+                    style.Border = length;
+                    style.BorderTop = style.BorderRight = style.BorderBottom = style.BorderLeft = length;
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

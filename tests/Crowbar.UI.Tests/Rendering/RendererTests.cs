@@ -34,7 +34,7 @@ public class RendererTests
         button.SetInlineStyle("line-height", "32px");
         ui.Render();
 
-        Assert.Equal(10, button.ComputedStyle.PaddingLeft);
+        Assert.Equal(CssLength.Points(10), button.ComputedStyle.PaddingLeft);
         var buttonText = button.Children[0];
         Assert.Equal("center", buttonText.ComputedStyle.TextAlign);
         Assert.Equal("center", buttonText.ComputedStyle.VerticalAlign);

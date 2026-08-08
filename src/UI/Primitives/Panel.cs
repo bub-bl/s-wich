@@ -39,6 +39,12 @@ public class Panel
     public bool HasScope(string scopeId) => !string.IsNullOrEmpty(scopeId) && _scopeIds.Contains(scopeId);
     public ComputedStyle ComputedStyle { get; internal set; } = new();
     public UiRect Layout { get; internal set; }
+    /// <summary>Resolved padding of the last layout pass (percentages included).</summary>
+    public UiThickness LayoutPadding { get; internal set; }
+    /// <summary>Resolved border width of the last layout pass.</summary>
+    public UiThickness LayoutBorder { get; internal set; }
+    /// <summary>Resolved margin of the last layout pass.</summary>
+    public UiThickness LayoutMargin { get; internal set; }
     public bool IsVisible { get; set; } = true;
     public bool IsEnabled { get => _isEnabled; set { if (_isEnabled != value) { _isEnabled = value; Invalidate(); } } }
     public bool IsChecked { get => _isChecked; set { if (_isChecked != value) { _isChecked = value; Invalidate(); } } }

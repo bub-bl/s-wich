@@ -37,8 +37,8 @@ public class ScopedCssTests
         // The parent's scoped `root` rule must not leak into the child root.
         var childRoot = TestUi.Find(ui.Screen, p => p.TagName == "root" && !ReferenceEquals(p, ui.Content));
         Assert.NotNull(childRoot);
-        Assert.Equal(50, childRoot.ComputedStyle.Width);
-        Assert.NotEqual(99, childRoot.ComputedStyle.Height);
+        Assert.Equal(CssLength.Points(50), childRoot.ComputedStyle.Width);
+        Assert.NotEqual(CssLength.Points(99), childRoot.ComputedStyle.Height);
     }
 
     [Fact]

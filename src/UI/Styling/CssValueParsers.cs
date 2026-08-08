@@ -36,6 +36,48 @@ public static class CssValueParsers
         return true;
     }
 
+    /// <summary>
+    /// Parses a CSS length with its unit: pixels/unitless numbers, percentages,
+    /// <c>auto</c> and the content-based keywords (<c>max-content</c>,
+    /// <c>fit-content</c>). The <paramref name="allowAuto"/> and
+    /// <paramref name="allowContent"/> flags restrict which keywords the
+    /// property accepts (e.g. padding cannot be <c>auto</c>).
+    /// </summary>
+    public static bool TryParseCssLength(string value, out CssLength result, bool allowAuto = true, bool allowContent = true)
+    {
+        result = CssLength.Undefined;
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0) return false;
+        if (trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!allowAuto) return false;
+            result = CssLength.Auto;
+            return true;
+        }
+        if (trimmed.Equals("max-content", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!allowContent) return false;
+            result = CssLength.MaxContent;
+            return true;
+        }
+        if (trimmed.Equals("fit-content", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!allowContent) return false;
+            result = CssLength.FitContent;
+            return true;
+        }
+        if (trimmed.EndsWith('%'))
+        {
+            if (!float.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)) return false;
+            result = CssLength.Percent(Math.Max(0, percent));
+            return true;
+        }
+        if (trimmed.EndsWith("px", StringComparison.OrdinalIgnoreCase)) trimmed = trimmed[..^2];
+        if (!float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var points)) return false;
+        result = CssLength.Points(Math.Max(0, points));
+        return true;
+    }
+
     /// <summary>Parses a duration, expressed in seconds (<c>200ms</c> or <c>0.2s</c>).</summary>
     public static bool TryParseTime(string value, out float result)
     {
@@ -48,24 +90,24 @@ public static class CssValueParsers
         return true;
     }
 
-    /// <summary>Parses the 1 to 4 value box shorthand (margin/padding).</summary>
-    public static bool TryParseBox(string value, out BoxValues box)
+    /// <summary>Parses the 1 to 4 value box shorthand (margin/padding), lengths may be <c>auto</c>.</summary>
+    public static bool TryParseLengthBox(string value, out BoxValues<CssLength> box, bool allowAuto = false)
     {
         box = default;
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length is < 1 or > 4) return false;
-        var parsed = new float[parts.Length];
+        var parsed = new CssLength[parts.Length];
         for (var i = 0; i < parts.Length; i++)
-            if (!TryParseLength(parts[i], out parsed[i])) return false;
+            if (!TryParseCssLength(parts[i], out parsed[i], allowAuto, allowContent: false)) return false;
 
         var top = parsed[0];
         var right = parts.Length > 1 ? parsed[1] : top;
         var bottom = parts.Length > 2 ? parsed[2] : top;
         var left = parts.Length > 3 ? parsed[3] : right;
-        box = new BoxValues(top, right, bottom, left);
+        box = new BoxValues<CssLength>(top, right, bottom, left);
         return true;
     }
 }
 
 /// <summary>Resolved box-shorthand values (top, right, bottom, left).</summary>
-public readonly record struct BoxValues(float Top, float Right, float Bottom, float Left);
+public readonly record struct BoxValues<T>(T Top, T Right, T Bottom, T Left);

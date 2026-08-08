@@ -56,7 +56,8 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
         // An empty focused input still needs a text pass so its caret can be
         // drawn at the beginning of the field.
         if (!string.IsNullOrEmpty(text) || panel is TextInput { IsFocused: true }) DrawText(canvas, panel, rect, text, alpha);
-        if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase))
+        if (panel.ComputedStyle.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ||
+            panel.ComputedStyle.Overflow.Equals("scroll", StringComparison.OrdinalIgnoreCase))
         {
             canvas.Save();
             canvas.ClipRect(rect);
@@ -69,10 +70,11 @@ public sealed class SkiaUiRenderer : IUiRenderer, IDisposable
     private static void DrawText(SKCanvas canvas, Panel panel, SKRect rect, string text, byte alpha)
     {
         var style = panel.ComputedStyle;
-        var left = rect.Left + style.PaddingLeft;
-        var top = rect.Top + style.PaddingTop;
-        var contentWidth = Math.Max(0, rect.Width - style.PaddingLeft - style.PaddingRight);
-        var contentHeight = Math.Max(0, rect.Height - style.PaddingTop - style.PaddingBottom);
+        var padding = panel.LayoutPadding;
+        var left = rect.Left + padding.Left;
+        var top = rect.Top + padding.Top;
+        var contentWidth = Math.Max(0, rect.Width - padding.Left - padding.Right);
+        var contentHeight = Math.Max(0, rect.Height - padding.Top - padding.Bottom);
         var lineHeight = style.LineHeight > 0 ? style.LineHeight : style.FontSize * 1.25f;
 
         using var paint = new SKPaint { Color = new SKColor(style.Color.R, style.Color.G, style.Color.B, alpha), IsAntialias = true };

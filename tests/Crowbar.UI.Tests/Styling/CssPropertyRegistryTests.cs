@@ -11,15 +11,15 @@ public class CssPropertyRegistryTests
     {
         // Register a property aliased to an existing computed-style slot: the
         // whole cascade (parse -> apply -> read) works with a single registration.
-        CssProperties.Register(CssProperties.Dimension(CustomPropertyName, s => s.Width, (s, v) => s.Width = v));
+        CssProperties.Register(CssProperties.Length(CustomPropertyName, s => s.Width, (s, v) => s.Width = v));
 
         var panel = new Panel();
         panel.AddClass("card");
         var style = StyleSheet.Parse($".card {{ {CustomPropertyName}: 42px; }}").Compute(panel);
 
         Assert.True(CssProperties.TryGet(CustomPropertyName, out var property));
-        Assert.Equal(42f, property!.GetValue(style));
-        Assert.Equal(42f, style.Width);
+        Assert.Equal(CssLength.Points(42), property!.GetValue(style));
+        Assert.Equal(CssLength.Points(42), style.Width);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class CssPropertyRegistryTests
     {
         var style = new ComputedStyle();
         Assert.False(CssProperties.TryApply(style, "definitely-not-a-property", "12px"));
-        Assert.Null(style.Width);
+        Assert.Equal(CssLength.Undefined, style.Width);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class CssPropertyRegistryTests
     public void NonAnimatablePropertyDoesNotLerp()
     {
         Assert.True(CssProperties.TryGet("width", out var width));
-        Assert.Null(width!.Lerp(10f, 20f, 0.5f));
+        Assert.Null(width!.Lerp(CssLength.Points(10), CssLength.Points(20), 0.5f));
     }
 
     [Fact]
@@ -103,12 +103,12 @@ public class CssPropertyRegistryTests
     {
         var style = new ComputedStyle
         {
-            Width = 100,
+            Width = CssLength.Points(100),
             Opacity = 0.5f,
             BackgroundColor = new UiColor(255, 0, 0, 255)
         };
         CssProperties.Reset(style);
-        Assert.Null(style.Width);
+        Assert.Equal(CssLength.Undefined, style.Width);
         Assert.Equal(1f, style.Opacity);
         Assert.Equal(UiColor.Transparent, style.BackgroundColor);
     }

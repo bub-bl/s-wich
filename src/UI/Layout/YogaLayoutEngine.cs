@@ -4,9 +4,11 @@ using SkiaSharp;
 namespace Crowbar.UI;
 
 /// <summary>
-/// Small Yoga-compatible flex layout adapter backed by Yoga.Net (the maintained
-/// C# port of Meta's Yoga, namespace Facebook.Yoga). The tree is rebuilt on
-/// every pass and kept independent of the renderer.
+/// Yoga-compatible flex layout adapter backed by Yoga.Net (the maintained C#
+/// port of Meta's Yoga, namespace Facebook.Yoga). Every layout-relevant CSS
+/// property maps 1:1 onto a Yoga style property, so Yoga resolves percentages,
+/// auto margins, wrapping, absolute positioning, aspect ratio and RTL natively.
+/// The tree is rebuilt on every pass and kept independent of the renderer.
 /// </summary>
 public sealed class YogaLayoutEngine
 {
@@ -16,12 +18,13 @@ public sealed class YogaLayoutEngine
     {
         LayoutPasses++;
         ApplyStyles(root, sheet, null);
-        var rootWidth = root.ComputedStyle.Width ?? width;
-        var rootHeight = root.ComputedStyle.Height ?? height;
+        var style = root.ComputedStyle;
         var yogaRoot = BuildYogaTree(root);
-        yogaRoot.Style.SetDimension(Dimension.Width, StyleSizeLength.Points(rootWidth));
-        yogaRoot.Style.SetDimension(Dimension.Height, StyleSizeLength.Points(rootHeight));
-        LayoutAlgorithm.CalculateLayout(yogaRoot, rootWidth, rootHeight, Direction.LTR);
+        // The root always gets an explicit size: the CSS size when set (points
+        // or percent, resolved against the viewport) or the full viewport.
+        yogaRoot.Style.SetDimension(Dimension.Width, style.Width.IsDefined ? ToSize(style.Width) : StyleSizeLength.Points(width));
+        yogaRoot.Style.SetDimension(Dimension.Height, style.Height.IsDefined ? ToSize(style.Height) : StyleSizeLength.Points(height));
+        LayoutAlgorithm.CalculateLayout(yogaRoot, width, height, Direction.LTR);
         ReadLayout(root, yogaRoot, 0, 0);
         root.ClearDirty();
     }
@@ -63,38 +66,91 @@ public sealed class YogaLayoutEngine
         {
             Style =
             {
-                FlexDirection = style.FlexDirection.Equals("row", StringComparison.OrdinalIgnoreCase) ? FlexDirection.Row : FlexDirection.Column,
+                Direction = ParseDirection(style.Direction),
+                FlexDirection = ParseFlexDirection(style.FlexDirection),
                 JustifyContent = ParseJustify(style.JustifyContent),
+                JustifyItems = ParseJustify(style.JustifyItems),
+                JustifySelf = ParseJustify(style.JustifySelf),
+                AlignContent = ParseAlign(style.AlignContent),
                 AlignItems = ParseAlign(style.AlignItems),
-                Display = style.Display.Equals("none", StringComparison.OrdinalIgnoreCase) || !panel.IsVisible ? Display.None : Display.Flex,
-                FlexGrow = new FloatOptional(style.FlexGrow),
-                Overflow = style.Overflow.Equals("hidden", StringComparison.OrdinalIgnoreCase) ? Overflow.Hidden : Overflow.Visible,
+                AlignSelf = ParseAlign(style.AlignSelf),
+                PositionType = ParsePositionType(style.PositionType),
+                FlexWrap = ParseWrap(style.FlexWrap),
+                Display = ParseDisplay(style.Display, panel.IsVisible),
+                Overflow = ParseOverflow(style.Overflow),
                 BoxSizing = style.BoxSizing.Equals("content-box", StringComparison.OrdinalIgnoreCase) ? BoxSizing.ContentBox : BoxSizing.BorderBox,
             }
         };
         node.SetContext(panel);
 
+        ApplyFlex(node, style);
+        ApplyDimensions(node, style);
+        ApplyBoxEdges(node, style);
+        ApplyPositionOffsets(node, style);
+        ApplyGaps(node, style);
+        if (style.AspectRatio > 0) node.Style.AspectRatio = new FloatOptional(style.AspectRatio);
+        ApplyTextMeasure(node, panel, style);
+
+        for (var i = 0; i < panel.Children.Count; i++)
+        {
+            var child = BuildYogaTree(panel.Children[i]);
+            node.InsertChild(child, (nuint)i);
+            child.SetOwner(node);
+        }
+        return node;
+    }
+
+    private static void ApplyFlex(Node node, ComputedStyle style)
+    {
+        node.Style.FlexGrow = new FloatOptional(style.FlexGrow);
+        if (style.FlexShrink != 0) node.Style.FlexShrink = new FloatOptional(style.FlexShrink);
+        if (style.FlexBasis.IsDefined) node.Style.FlexBasis = ToSize(style.FlexBasis);
+    }
+
+    private static void ApplyDimensions(Node node, ComputedStyle style)
+    {
         node.Style.SetDimension(Dimension.Width, ToSize(style.Width));
         node.Style.SetDimension(Dimension.Height, ToSize(style.Height));
         node.Style.SetMinDimension(Dimension.Width, ToSize(style.MinWidth));
         node.Style.SetMaxDimension(Dimension.Width, ToSize(style.MaxWidth));
         node.Style.SetMinDimension(Dimension.Height, ToSize(style.MinHeight));
         node.Style.SetMaxDimension(Dimension.Height, ToSize(style.MaxHeight));
+    }
 
-        SetPadding(node, Edge.Top, style.PaddingTop);
-        SetPadding(node, Edge.Right, style.PaddingRight);
-        SetPadding(node, Edge.Bottom, style.PaddingBottom);
-        SetPadding(node, Edge.Left, style.PaddingLeft);
+    private static void ApplyBoxEdges(Node node, ComputedStyle style)
+    {
         SetMargin(node, Edge.Top, style.MarginTop);
         SetMargin(node, Edge.Right, style.MarginRight);
         SetMargin(node, Edge.Bottom, style.MarginBottom);
         SetMargin(node, Edge.Left, style.MarginLeft);
+        SetPadding(node, Edge.Top, style.PaddingTop);
+        SetPadding(node, Edge.Right, style.PaddingRight);
+        SetPadding(node, Edge.Bottom, style.PaddingBottom);
+        SetPadding(node, Edge.Left, style.PaddingLeft);
+        SetBorder(node, Edge.Top, style.BorderTop);
+        SetBorder(node, Edge.Right, style.BorderRight);
+        SetBorder(node, Edge.Bottom, style.BorderBottom);
+        SetBorder(node, Edge.Left, style.BorderLeft);
+    }
 
+    private static void ApplyPositionOffsets(Node node, ComputedStyle style)
+    {
+        if (style.PositionTop.IsDefined) node.Style.SetPosition(Edge.Top, ToLength(style.PositionTop));
+        if (style.PositionRight.IsDefined) node.Style.SetPosition(Edge.Right, ToLength(style.PositionRight));
+        if (style.PositionBottom.IsDefined) node.Style.SetPosition(Edge.Bottom, ToLength(style.PositionBottom));
+        if (style.PositionLeft.IsDefined) node.Style.SetPosition(Edge.Left, ToLength(style.PositionLeft));
+    }
+
+    private static void ApplyGaps(Node node, ComputedStyle style)
+    {
         // Yoga.Net supports gap natively (Facebook.Yoga had to fake it through
         // child margins), so the row/column gaps map straight to gutters.
-        if (style.ColumnGap != 0) node.Style.SetGap(Gutter.Column, StyleLength.Points(style.ColumnGap));
-        if (style.RowGap != 0) node.Style.SetGap(Gutter.Row, StyleLength.Points(style.RowGap));
+        if (style.ColumnGap.IsDefined) node.Style.SetGap(Gutter.Column, ToLength(style.ColumnGap));
+        if (style.RowGap.IsDefined) node.Style.SetGap(Gutter.Row, ToLength(style.RowGap));
+    }
 
+    private static void ApplyTextMeasure(Node node, Panel panel, ComputedStyle style)
+    {
         if ((panel.TagName.Equals("text", StringComparison.OrdinalIgnoreCase) || panel is TextInput) && !string.IsNullOrEmpty(panel is TextInput input ? input.Value : panel.Text))
         {
             var text = panel is TextInput inputValue ? inputValue.Value : panel.Text;
@@ -102,9 +158,8 @@ public sealed class YogaLayoutEngine
             var lineHeight = style.LineHeight > 0 ? style.LineHeight : style.FontSize * 1.25f;
             // Yoga treats the measure result as the content box and adds the
             // node's padding/border around it, so the callback must only size
-            // the text itself (adding padding here double-counted it). The text
-            // is measured with the same Skia font as the renderer so the layout
-            // box matches the drawn glyphs.
+            // the text itself. The text is measured with the same Skia font as
+            // the renderer so the layout box matches the drawn glyphs.
             var textWidth = 0f;
             using (var font = new SKFont { Size = fontSize })
             {
@@ -117,13 +172,6 @@ public sealed class YogaLayoutEngine
                 Height = lineHeight
             });
         }
-        for (var i = 0; i < panel.Children.Count; i++)
-        {
-            var child = BuildYogaTree(panel.Children[i]);
-            node.InsertChild(child, (nuint)i);
-            child.SetOwner(node);
-        }
-        return node;
     }
 
     private static void ReadLayout(Panel panel, Node node, float parentX, float parentY)
@@ -134,23 +182,105 @@ public sealed class YogaLayoutEngine
             parentY + layout.Position(PhysicalEdge.Top),
             layout.Dimension(Dimension.Width),
             layout.Dimension(Dimension.Height));
+        // Yoga resolves every length (including percentages) during layout;
+        // the renderer consumes these resolved values instead of re-deriving
+        // them from the computed style.
+        panel.LayoutPadding = new UiThickness(
+            layout.Padding(PhysicalEdge.Left),
+            layout.Padding(PhysicalEdge.Top),
+            layout.Padding(PhysicalEdge.Right),
+            layout.Padding(PhysicalEdge.Bottom));
+        panel.LayoutBorder = new UiThickness(
+            layout.Border(PhysicalEdge.Left),
+            layout.Border(PhysicalEdge.Top),
+            layout.Border(PhysicalEdge.Right),
+            layout.Border(PhysicalEdge.Bottom));
+        panel.LayoutMargin = new UiThickness(
+            layout.Margin(PhysicalEdge.Left),
+            layout.Margin(PhysicalEdge.Top),
+            layout.Margin(PhysicalEdge.Right),
+            layout.Margin(PhysicalEdge.Bottom));
         for (var i = 0; i < panel.Children.Count && i < (int)node.GetChildCount(); i++)
             ReadLayout(panel.Children[i], node.GetChild((nuint)i)!, panel.Layout.X, panel.Layout.Y);
     }
 
-    private static StyleSizeLength ToSize(float? value) => value is float v ? StyleSizeLength.Points(v) : StyleSizeLength.Undefined();
-
-    private static void SetPadding(Node node, Edge edge, float value)
+    private static void SetMargin(Node node, Edge edge, CssLength value)
     {
-        if (value != 0) node.Style.SetPadding(edge, StyleLength.Points(value));
+        if (value.IsDefined) node.Style.SetMargin(edge, ToLength(value));
     }
 
-    private static void SetMargin(Node node, Edge edge, float value)
+    private static void SetPadding(Node node, Edge edge, CssLength value)
     {
-        if (value != 0) node.Style.SetMargin(edge, StyleLength.Points(value));
+        if (value.IsDefined) node.Style.SetPadding(edge, ToLength(value));
     }
 
-    private static Align ParseAlign(string value) => value switch
+    private static void SetBorder(Node node, Edge edge, CssLength value)
+    {
+        if (value.IsDefined) node.Style.SetBorder(edge, ToLength(value));
+    }
+
+    private static StyleSizeLength ToSize(CssLength value) => value.Unit switch
+    {
+        CssLengthUnit.Points => StyleSizeLength.Points(value.Value),
+        CssLengthUnit.Percent => StyleSizeLength.Percent(value.Value),
+        CssLengthUnit.Auto => StyleSizeLength.OfAuto(),
+        CssLengthUnit.MaxContent => StyleSizeLength.OfMaxContent(),
+        CssLengthUnit.FitContent => StyleSizeLength.OfFitContent(),
+        _ => StyleSizeLength.Undefined()
+    };
+
+    private static StyleLength ToLength(CssLength value) => value.Unit switch
+    {
+        CssLengthUnit.Points => StyleLength.Points(value.Value),
+        CssLengthUnit.Percent => StyleLength.Percent(value.Value),
+        CssLengthUnit.Auto => StyleLength.OfAuto(),
+        _ => StyleLength.Undefined()
+    };
+
+    private static FlexDirection ParseFlexDirection(string value) => value.ToLowerInvariant() switch
+    {
+        "row" => FlexDirection.Row,
+        "row-reverse" => FlexDirection.RowReverse,
+        "column-reverse" => FlexDirection.ColumnReverse,
+        _ => FlexDirection.Column
+    };
+
+    private static Wrap ParseWrap(string value) => value.ToLowerInvariant() switch
+    {
+        "wrap" => Wrap.Wrap,
+        "wrap-reverse" => Wrap.WrapReverse,
+        _ => Wrap.NoWrap
+    };
+
+    private static PositionType ParsePositionType(string value) => value.ToLowerInvariant() switch
+    {
+        "absolute" => PositionType.Absolute,
+        "static" => PositionType.Static,
+        _ => PositionType.Relative
+    };
+
+    private static Direction ParseDirection(string value) => value.ToLowerInvariant() switch
+    {
+        "ltr" => Direction.LTR,
+        "rtl" => Direction.RTL,
+        _ => Direction.Inherit
+    };
+
+    private static Display ParseDisplay(string value, bool visible) => !visible ? Display.None : value.ToLowerInvariant() switch
+    {
+        "none" => Display.None,
+        "contents" => Display.Contents,
+        _ => Display.Flex
+    };
+
+    private static Overflow ParseOverflow(string value) => value.ToLowerInvariant() switch
+    {
+        "hidden" => Overflow.Hidden,
+        "scroll" => Overflow.Scroll,
+        _ => Overflow.Visible
+    };
+
+    private static Align ParseAlign(string value) => value.ToLowerInvariant() switch
     {
         "auto" => Align.Auto,
         "flex-start" => Align.FlexStart,
@@ -165,7 +295,8 @@ public sealed class YogaLayoutEngine
         "end" => Align.End,
         _ => Align.Stretch
     };
-    private static Justify ParseJustify(string value) => value switch
+
+    private static Justify ParseJustify(string value) => value.ToLowerInvariant() switch
     {
         "auto" => Justify.Auto,
         "flex-start" => Justify.FlexStart,

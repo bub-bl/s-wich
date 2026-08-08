@@ -167,7 +167,7 @@ public class TextInput : Panel
     }
     private int CaretFromX(float x)
     {
-        var contentX = Math.Max(0, x - Layout.X - ComputedStyle.PaddingLeft);
+        var contentX = Math.Max(0, x - Layout.X - LayoutPadding.Left);
         if (string.IsNullOrEmpty(Value) || contentX <= 0) return 0;
 
         using var font = new SkiaSharp.SKFont { Size = ComputedStyle.FontSize };
